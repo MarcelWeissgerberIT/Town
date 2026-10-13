@@ -18,21 +18,25 @@ const REGION = 12;
 export class Nature {
   constructor(scene, world, M) {
     this.scene = scene; this.world = world; this.M = M;
+    // with photographic foliage the leaf texture brings the colour, the vertex colours only shade
+    const ph = this.photo = !!M.foliage;
+    const k = (proc, photo) => (ph ? photo : proc);
+    const F = (v) => (ph ? [0.78 + v, 0.84 + v, 0.74 + v] : null);
     this.geos = {
-      round: geoOf((B) => MD.treeRound(B, '#5f9a3c', 1)),
-      round2: geoOf((B) => MD.treeRound(B, '#6fa843', 7)),
-      tall: geoOf((B) => MD.treeTall(B, '#4f8a34', 2)),
-      conifer: geoOf((B) => MD.treeConifer(B, '#2f5e3a')),
-      bush: geoOf((B) => MD.bush(B, '#5a8f3a', 4)),
-      fruit: geoOf((B) => { MD.treeRound(B, '#6aa24a', 9); for (let i = 0; i < 9; i++) B.sphere('solid', Math.cos(i * 2.4) * 0.1, 0.18 + (i % 3) * 0.06, Math.sin(i * 2.4) * 0.1, 0.014, 0.014, 0.014, [0.75, 0.05, 0.03], 4, 3); }),
+      round: geoOf((B) => MD.treeRound(B, k('#5f9a3c', '#dfe8d4'), 1)),
+      round2: geoOf((B) => MD.treeRound(B, k('#6fa843', '#eef4dc'), 7)),
+      tall: geoOf((B) => MD.treeTall(B, k('#4f8a34', '#cfdcc2'), 2)),
+      conifer: geoOf((B) => MD.treeConifer(B, k('#2f5e3a', '#e2ebe2'))),
+      bush: geoOf((B) => MD.bush(B, k('#5a8f3a', '#d6e2c8'), 4)),
+      fruit: geoOf((B) => { MD.treeRound(B, k('#6aa24a', '#e6eed8'), 9); for (let i = 0; i < 9; i++) B.sphere('solid', Math.cos(i * 2.4) * 0.1, 0.18 + (i % 3) * 0.06, Math.sin(i * 2.4) * 0.1, 0.014, 0.014, 0.014, ph ? [1.6, 0.25, 0.15] : [0.75, 0.05, 0.03], 4, 3); }),
       forest: geoOf((B) => {
         B.cyl('solid', 0, 0, 0, 0.022, 0.14, 5, [0.25, 0.15, 0.08], { cap: false });
-        B.sphere('solid', 0, 0.24, 0, 0.14, 0.13, 0.14, [0.2, 0.38, 0.11], 7, 4, { grad: true });
+        B.sphere('solid', 0, 0.24, 0, 0.14, 0.13, 0.14, F(0) || [0.2, 0.38, 0.11], 7, 4, { grad: true });
       }),
       pine: geoOf((B) => {
         B.cyl('solid', 0, 0, 0, 0.018, 0.08, 4, [0.25, 0.15, 0.08], { cap: false });
-        B.cyl('solid', 0, 0.06, 0, 0.12, 0.2, 7, [0.13, 0.28, 0.15], { r1: 0.03, cap: false });
-        B.cyl('solid', 0, 0.2, 0, 0.085, 0.2, 7, [0.16, 0.33, 0.18], { r1: 0.0, cap: false });
+        B.cyl('solid', 0, 0.06, 0, 0.12, 0.2, 7, F(-0.06) || [0.13, 0.28, 0.15], { r1: 0.03, cap: false });
+        B.cyl('solid', 0, 0.2, 0, 0.085, 0.2, 7, F(0.04) || [0.16, 0.33, 0.18], { r1: 0.0, cap: false });
       }),
     };
     this.inner = new Map();  // key -> InstancedMesh (map trees, rebuilt on change)
@@ -96,7 +100,8 @@ export class Nature {
     const type = key.split('|')[0];
     if (!mesh || mesh.instanceMatrix.count < L.length) {
       if (mesh) { this.group.remove(mesh); mesh.dispose(); }
-      mesh = new THREE.InstancedMesh(this.geos[type], this.M.solid, Math.max(8, Math.ceil(L.length * (outer ? 1 : 1.4))));
+      const mat = !this.photo ? this.M.solid : (type === 'conifer' || type === 'pine') ? this.M.needles : this.M.foliage;
+      mesh = new THREE.InstancedMesh(this.geos[type], mat, Math.max(8, Math.ceil(L.length * (outer ? 1 : 1.4))));
       mesh.castShadow = true; mesh.receiveShadow = !outer;
       this.group.add(mesh);
     }

@@ -49,6 +49,17 @@ export function makeMaterials(T) {
   M.dirt = new THREE.MeshStandardMaterial({ map: T.dirt, vertexColors: true, roughness: 0.97 });
   M.sand = new THREE.MeshStandardMaterial({ map: T.sand, vertexColors: true, roughness: 0.97 });
   M.field = new THREE.MeshStandardMaterial({ map: T.field, vertexColors: true, roughness: 0.97 });
+  if (T.leaves) {
+    T.leaves.repeat.set(3, 2); T.needles.repeat.set(3, 2);
+    // photographic ground: finer repeats so grass blades and stones keep a believable size
+    T.grass.repeat.set(2.6, 2.6); T.cobble.repeat.set(1.8, 1.8); T.dirt.repeat.set(1.6, 1.6); T.asphalt.repeat.set(1.4, 1.4); T.gravel.repeat.set(2, 2);
+    M.foliage = new THREE.MeshStandardMaterial({ map: T.leaves, vertexColors: true, roughness: 0.85 });
+    M.needles = new THREE.MeshStandardMaterial({ map: T.needles, vertexColors: true, roughness: 0.9 });
+    const hedgeTex = T.leaves.clone(); hedgeTex.repeat.set(1, 1); hedgeTex.needsUpdate = true;
+    M.hedge = new THREE.MeshStandardMaterial({ map: hedgeTex, vertexColors: true, roughness: 0.9 });
+  } else {
+    M.hedge = M.grass;
+  }
   M.ao = new THREE.MeshBasicMaterial({ map: T.ao, transparent: true, depthWrite: false, opacity: 0.55, color: 0x000000 });
   M.ao.color.set(0x1a1410);
   M.water = new THREE.MeshStandardMaterial({

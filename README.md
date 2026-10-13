@@ -4,13 +4,18 @@ Ein kleines Dorf am Fluss wird zur Metropole. Lindenau ist eine Stadtbausimulati
 hochauflösender 3D-Grafik in isometrischer Ansicht: Man kann bis auf einzelne Menschen heranzoomen,
 den Baustellen beim Wachsen zusehen und dem Leben in den Straßen folgen.
 
-Alle Grafiken (Fassaden, Dachziegel, Kopfsteinpflaster, Ladenschilder, Bäume, Fahrzeuge, Menschen)
-werden beim Start prozedural erzeugt. Es gibt keine Bilddateien, deshalb bleibt alles bei jeder
-Zoomstufe scharf.
+Die Oberflächen sind fotorealistisch: Fassaden (Putz in acht Farben, Fachwerk, Klinker, Läden mit
+Auslagen, moderne Wohnhäuser, Glasfassaden, Kirchenfenster), Dachziegel, Kopfsteinpflaster, Asphalt,
+Rasen und Laub wurden mit **OpenArt** generiert und zu einem Fassaden-Atlas mit passender
+Nachtbeleuchtung verarbeitet. Ladenschilder mit deutscher Beschriftung, Gebäudeformen, Fahrzeuge und
+Menschen entstehen im Spiel prozedural.
 
 ## Spielen
 
-**https://marcelweissgerberit.github.io/Town/** (wird bei jedem Push über GitHub Pages veröffentlicht)
+**https://marcelweissgerberit.github.io/Town/** (wird bei jedem Push auf `main` über GitHub Pages veröffentlicht)
+
+Läuft auf Desktop (Maus und Tastatur) und Tablet (Touch). Auf iPad und Android-Tablets lässt sich
+das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 
 ## Bedienung
 
@@ -57,12 +62,30 @@ python3 -m http.server 8080
 
 Three.js (r169) wird per Import-Map von jsDelivr geladen.
 
-Optionale URL-Parameter: `?q=low|mid|high` (Grafikqualität), `?fresh` (Spielstand ignorieren).
+Optionale URL-Parameter: `?q=low|mid|tablet|high` (Grafikqualität), `?fresh` (Spielstand ignorieren),
+`?procedural` (ohne Fotoassets).
+
+## Assets
+
+Alle Bilder wurden mit dem OpenArt MCP erzeugt (Modelle *Nano Banana 2* und *GPT Image 2*, text2image,
+Projekt „Lindenau Stadtbau“). Quell-URLs und historyIds stehen in `tools/asset_sources.json`.
+
+Für die Fenster wurden die Glasscheiben im Prompt als reines Magenta angefordert. Die Pipeline ersetzt
+diese Maske durch gespiegeltes Glas und nutzt sie als Leuchtmaske, damit nachts genau die Fenster
+leuchten. Rohbilder neu verarbeiten:
+
+```bash
+pip install pillow numpy scipy
+python3 tools/process_assets.py   # lädt fehlende Rohbilder, schreibt assets/
+```
+
+Ohne die Bilddateien fällt das Spiel automatisch auf prozedurale Texturen zurück
+(erzwingen mit `?procedural`).
 
 ## Einzeldatei-Build
 
-`node tools/build-artifact.mjs dist/lindenau.html` bündelt das Spiel mit esbuild in eine einzige
-HTML-Seite (z. B. zum Teilen als Artifact).
+`node tools/build-artifact.mjs dist/lindenau.html` bündelt den Code mit esbuild in eine einzige
+HTML-Seite (z. B. zum Teilen als Artifact). Der Ordner `assets/` muss daneben liegen.
 
 ## Projektstruktur
 
@@ -71,7 +94,9 @@ index.html          Oberfläche (HUD, Werkzeuge, Dialoge)
 css/style.css       Stil der Oberfläche
 js/main.js          Start, Hauptschleife, Ereignisse (Brände, Stufenaufstieg, Speichern)
 js/config.js        Gebäude, Stadtstufen, Kosten
-js/textures.js      prozedurale Texturen und Fassaden-Atlas
+assets/             fotorealistische Texturen (OpenArt) und Fassaden-Atlas
+tools/              Asset-Pipeline (process_assets.py) und Einzeldatei-Build
+js/textures.js      Laden der Fotoassets, Ladenschilder, prozeduraler Fallback
 js/materials.js     Materialien inkl. nächtlicher Fensterbeleuchtung
 js/geom.js          Geometrie-Builder (Buckets je Material)
 js/buildgen.js      Gebäudegeneratoren (Fachwerk, Altbau, Hochhäuser, Kirche, Stadion …)

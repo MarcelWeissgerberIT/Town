@@ -12,7 +12,8 @@ const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module
 const js = execFileSync('npx', ['-y', 'esbuild@0.24.0', path.join(root, 'js/main.js'), '--bundle', '--format=esm', '--minify', '--external:three', '--target=es2020'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   .replace(/from\s*"three"/g, `from"${THREE_URL}"`)
   .replace(/import\s*\*\s*as\s*(\w+)\s*from\s*"three"/g, `import*as $1 from"${THREE_URL}"`);
-const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
+// the stylesheet is inlined at the page root, so its asset URLs lose the "../"
+const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8').replaceAll('url("../assets/', 'url("assets/');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const body = html.slice(html.indexOf('<!--APP-->') + 10, html.indexOf('<!--/APP-->'));
 const page = `<title>Lindenau</title>

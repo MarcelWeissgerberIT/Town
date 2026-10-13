@@ -24,16 +24,17 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2430; color: var(--text); font-family: var(--font-body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
-#app { position: fixed; inset: 0; user-select: none; -webkit-user-select: none; }
+#app { position: fixed; inset: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
-button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; touch-action: manipulation; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); backdrop-filter: blur(10px) saturate(1.2); -webkit-backdrop-filter: blur(10px) saturate(1.2); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22); }
 [hidden] { display: none !important; }
 
 /* loading */
-.loading { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #2b3a4c, #141b24); z-index: 50; transition: opacity .6s; }
+.loading { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 14vh; background: linear-gradient(180deg, rgba(10, 14, 20, 0.15) 30%, rgba(10, 14, 20, 0.78)), url("../assets/ui/keyart.jpg") center / cover no-repeat, #141b24; z-index: 50; transition: opacity .6s; }
+.load-title { text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5); }
 .loading.done { opacity: 0; pointer-events: none; }
 .load-card { text-align: center; }
 .load-title { font-family: var(--font-display); font-weight: 600; font-size: 44px; letter-spacing: .01em; }
@@ -148,6 +149,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .modal { position: absolute; inset: 0; background: rgba(8, 12, 18, 0.5); display: grid; place-items: center; z-index: 30; padding: 16px; }
 .modal-card { width: min(520px, 100%); padding: 22px 22px 18px; max-height: calc(100% - 32px); overflow: auto; background: rgba(22, 30, 40, 0.94); }
+.modal-hero { margin: -22px -22px 16px; height: 170px; border-radius: var(--r) var(--r) 0 0; background: url("../assets/ui/keyart.jpg") center 60% / cover no-repeat; }
 .modal-card h1 { font-family: var(--font-display); font-weight: 600; font-size: 30px; margin: 0 0 4px; line-height: 1.1; }
 .modal-card p { color: #d6dde5; line-height: 1.55; margin: 8px 0; max-width: 62ch; }
 .modal-card .lead { color: var(--muted); margin-top: 0; }
@@ -193,6 +195,20 @@ body.cinema .cinema-exit { display: flex; }
   .stat.time { display: none; }
   .controls .iconbtn#btnDay { display: none; }
   .camctl { display: none; }
+}
+/* touch screens (tablets, phones): larger hit targets */
+@media (pointer: coarse) {
+  .iconbtn { width: 44px; height: 44px; }
+  .seg button { min-width: 44px; height: 40px; }
+  .tool { min-height: 58px; }
+  .fcard { min-height: 58px; padding: 11px 12px; }
+  .btn { padding: 11px 12px; }
+  .info .close { width: 40px; height: 40px; }
+  .camctl .iconbtn { width: 46px; height: 46px; }
+}
+@media (pointer: coarse) and (min-width: 700px) {
+  .tool { min-width: 70px; font-size: 12px; }
+  .tool .ic { width: 25px; height: 25px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

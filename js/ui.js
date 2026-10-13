@@ -49,6 +49,30 @@ export class UI {
     ex.className = 'btn cinema-exit'; ex.innerHTML = `${icon('i-close')}Kinomodus beenden`;
     ex.onclick = () => this.setCinema(false);
     $('app').appendChild(ex);
+    this.bindTouchTaps();
+  }
+
+  // On touch screens a button fires as soon as the finger lifts. Browsers sometimes
+  // swallow the click that follows a map gesture; this keeps every tap reliable.
+  bindTouchTaps() {
+    let down = null, synthEl = null, synthAt = 0;
+    document.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') { down = null; return; }
+      const b = e.target.closest?.('button, .toast');
+      down = b ? { b, x: e.clientX, y: e.clientY, id: e.pointerId } : null;
+    }, true);
+    document.addEventListener('pointerup', (e) => {
+      const d = down; down = null;
+      if (!d || e.pointerId !== d.id || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 14) return;
+      if (!d.b.contains(document.elementFromPoint(e.clientX, e.clientY))) return;
+      synthEl = d.b; synthAt = performance.now();
+      d.b.click();
+    }, true);
+    document.addEventListener('click', (e) => {
+      if (e.isTrusted && synthEl && performance.now() - synthAt < 700 && synthEl.contains(e.target)) {
+        e.stopPropagation(); e.preventDefault(); synthEl = null;
+      }
+    }, true);
   }
 
   // ------------------------------------------------------------- toolbar
@@ -616,6 +640,7 @@ export class UI {
   closeModal() { $('modal').hidden = true; }
   welcome(onStart) {
     this.openModal(`
+      <div class="modal-hero" role="img" aria-label="Luftbild einer Kleinstadt am Fluss"></div>
       <h1>Willkommen in ${esc(this.sim.cityName || 'Lindenau')}</h1>
       <p class="lead">Ein kleines Dorf am Fluss. Baue Straßen, weise Wohn-, Gewerbe- und Industriegebiete aus und sieh zu, wie Baustellen entstehen, Kräne sich drehen und die Leute einziehen.</p>
       <div class="howto">

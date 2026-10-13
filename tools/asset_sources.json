@@ -1,0 +1,303 @@
+{
+ "_note": "Generiert mit OpenArt MCP (Nano Banana 2 / GPT Image 2, text2image). Projekt „Lindenau Stadtbau“.",
+ "apt_bal": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903082602_d4885eeb_1791903083168_4bbd3b45.png",
+  "historyId": "97MkBv1QxeLsoQJIysmb",
+  "model": "nano-banana-2"
+ },
+ "apt_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903084436_07c5b1c9_1791903084497_de46f7de.png",
+  "historyId": "1WG4aly7y2H89Cz4R7n2",
+  "model": "nano-banana-2"
+ },
+ "apt_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903121019_824e3389_1791903121083_4f6a76c3.png",
+  "historyId": "bgqd6ax2g0xGAN1vkozD",
+  "model": "nano-banana-2"
+ },
+ "apt_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903082685_69cd1611_1791903082759_cdb5bcd3.png",
+  "historyId": "uwcRbxIcOwuK2nadLLsw",
+  "model": "nano-banana-2"
+ },
+ "asphalt": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903190921_d6e16212_1791903191046_977eddb8.png",
+  "historyId": "xyyMZI9tNlFWYviCcWUr",
+  "model": "nano-banana-2"
+ },
+ "br_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903021285_3482e07c_1791903021623_45c1c08b.png",
+  "historyId": "WhQbS6hAUFW6Em9nLGBh",
+  "model": "nano-banana-2"
+ },
+ "br_ind": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903019301_1b83dc40_1791903019375_b1c6ae68.png",
+  "historyId": "JnUtvqARjm25f3bz6CwZ",
+  "model": "nano-banana-2"
+ },
+ "br_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903017331_aac618c3_1791903017625_60c7787b.png",
+  "historyId": "M4zD7xV5KNrcD8UXCyyp",
+  "model": "nano-banana-2"
+ },
+ "br_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903019854_57a430ba_1791903019932_c791c003.png",
+  "historyId": "fsFD6g35tzedFt3OCXja",
+  "model": "nano-banana-2"
+ },
+ "ch_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903173794_1abdbc11_1791903174247_63e3940b.png",
+  "historyId": "lNP8qQJ2iAvpPsjpYLOx",
+  "model": "nano-banana-2"
+ },
+ "ch_rose": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903175458_8d52f11e_1791903175563_d02b8e14.png",
+  "historyId": "Ws2QD9oTyYubdJ0Buq2o",
+  "model": "nano-banana-2"
+ },
+ "ch_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903135403_6e82097b_1791903135613_b68a768c.png",
+  "historyId": "4fHfZ4rhoCXdQ29G1s75",
+  "model": "nano-banana-2"
+ },
+ "ch_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903137195_b0dadc6d_1791903137430_7226f2ce.png",
+  "historyId": "AKxPnMTblPOYjT91erDV",
+  "model": "nano-banana-2"
+ },
+ "clock": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903177925_b5b0974b_1791903178433_d03c2074.png",
+  "historyId": "4wUeCJyZsqtHSmtvpOzO",
+  "model": "nano-banana-2"
+ },
+ "cobble": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902841575_05e3ffca_1791902841671_c63e4d3e.png",
+  "historyId": "7Lpr7DdCgMRAv14fRr7f",
+  "model": "nano-banana-2"
+ },
+ "dirt": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903221029_739691eb_1791903221576_4cef84fd.png",
+  "historyId": "BmesAL0xOB2bIzFPCA1S",
+  "model": "nano-banana-2"
+ },
+ "field": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903226030_401741f2_1791903226129_39f845b7.png",
+  "historyId": "HUXwbpjsFVsRrYwE5k8x",
+  "model": "nano-banana-2"
+ },
+ "fw_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902976953_64f735af_1791902977021_eeaafa26.png",
+  "historyId": "sGTsAUEHCXfTtvBXI4gM",
+  "model": "nano-banana-2"
+ },
+ "fw_gable": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902978661_4a748b53_1791902978722_8d13d59e.png",
+  "historyId": "cXG06mr8MENWmAfCcdiP",
+  "model": "nano-banana-2"
+ },
+ "fw_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902974098_f63caf01_1791902974312_84a6a7d8.png",
+  "historyId": "JvArU6eeGYXonmbqNsrj",
+  "model": "nano-banana-2"
+ },
+ "fw_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902974548_daf84eff_1791902974685_fceaa321.png",
+  "historyId": "Ljut1D5zpb2fAt7Jdayj",
+  "model": "nano-banana-2"
+ },
+ "garage_grey": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903025314_fd62ee1d_1791903025410_91b06511.png",
+  "historyId": "EnSpFjlRCYBEpTuSSWUZ",
+  "model": "nano-banana-2"
+ },
+ "garage_red": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903022289_d4e75032_1791903022357_f86a6799.png",
+  "historyId": "j3i7MP4w5LIWMwiM0Wlr",
+  "model": "nano-banana-2"
+ },
+ "glass_cw": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903124383_09aea4a3_1791903124512_493adfdf.png",
+  "historyId": "8kpNSpJ25r52uXkVWuvw",
+  "model": "nano-banana-2"
+ },
+ "glass_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903129665_1e393eec_1791903129809_5462eb23.png",
+  "historyId": "xUbDpKgbcOhzhuQXw3tK",
+  "model": "nano-banana-2"
+ },
+ "grass": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903191228_3d2429ae_1791903191330_3ea0098c.png",
+  "historyId": "fdR9cza6hZT6eyB9m3xR",
+  "model": "nano-banana-2"
+ },
+ "gravel": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/gpt-image-2-1_1791903370213_82cfa245.png",
+  "historyId": "52khKuFwUWuEy6gDwNl1",
+  "model": "gpt-image-2"
+ },
+ "hosp_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903176101_7227ad01_1791903176150_6e446327.png",
+  "historyId": "sRIYEeeHQ67DA7IcA2lN",
+  "model": "nano-banana-2"
+ },
+ "keyart": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903241759_808d3dfa_1791903242525_8c1f4e46.png",
+  "historyId": "KgbufYR2MqdmlZrfQPuj",
+  "model": "nano-banana-2"
+ },
+ "leaves": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903227785_ca01ed5d_1791903227839_8faeb2f1.png",
+  "historyId": "6xHWbq0xnRz7YSMvmViO",
+  "model": "nano-banana-2"
+ },
+ "metal_clad": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903133728_cc2462c7_1791903133795_8fb2216b.png",
+  "historyId": "ZrLUSImUS2KPZaHldU2A",
+  "model": "nano-banana-2"
+ },
+ "metal_dock": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903135213_05c416d5_1791903135375_be81efba.png",
+  "historyId": "53V64aEDqfJUmh9Yflqt",
+  "model": "nano-banana-2"
+ },
+ "needles": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903231635_a570788e_1791903231761_3bf64529.png",
+  "historyId": "moOi3aXGc4HIecahN6jE",
+  "model": "nano-banana-2"
+ },
+ "pl_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902970139_d5a7f31d_1791902970951_dc020fcf.png",
+  "historyId": "FGY1JWXnFST7XaQluhA2",
+  "model": "nano-banana-2"
+ },
+ "pl_gable": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902971764_745a00b9_1791902971807_9834847a.png",
+  "historyId": "ZCyoqhJmNW4Yvixj4eno",
+  "model": "nano-banana-2"
+ },
+ "pl_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902971377_6e75de4b_1791902971470_ac328d80.png",
+  "historyId": "Sjgd1XGAQZ4Q3KsPxudp",
+  "model": "nano-banana-2"
+ },
+ "pl_win_green": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902790171_9bec347b_1791902790238_8efb59f4.png",
+  "historyId": "q1xQBY3rkNPoir2NWOZj",
+  "model": "nano-banana-2"
+ },
+ "pl_win_plain": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902965609_bfa07399_1791902965703_97fced22.png",
+  "historyId": "Vaj9WtOMD9ZRRjDitT4B",
+  "model": "nano-banana-2"
+ },
+ "pl_win_white": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791902964531_0697c37e_1791902964590_90e1dbe9.png",
+  "historyId": "wwdFL4UWpeuoLo7yQIOs",
+  "model": "nano-banana-2"
+ },
+ "raw_brick": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903189026_b2ef41c3_1791903189109_cbc34d4d.png",
+  "historyId": "GxK90WtkOMy5BCPBpZcD",
+  "model": "nano-banana-2"
+ },
+ "raw_brick_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903186944_277867cf_1791903187017_c9794bc9.png",
+  "historyId": "HXxKRufkF3KCGegsS4Tn",
+  "model": "nano-banana-2"
+ },
+ "raw_conc": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903182315_c1bfe92c_1791903182413_55d4281f.png",
+  "historyId": "yQYj1bWOymNTO8eeUxlY",
+  "model": "nano-banana-2"
+ },
+ "raw_conc_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903180280_801d8824_1791903180359_e99e57f1.png",
+  "historyId": "TjosceTDentleLOVJtEw",
+  "model": "nano-banana-2"
+ },
+ "roof_metal": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/gpt-image-2-1_1791903246511_30408898.png",
+  "historyId": "Ho76oxkKCVffk0g619yD",
+  "model": "gpt-image-2"
+ },
+ "roof_tile": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/gpt-image-2-1_1791902867854_cfb19cf1.png",
+  "historyId": "jsD9JexiRt2ANIIR53YH",
+  "model": "gpt-image-2"
+ },
+ "sand": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903222693_b79641b8_1791903222966_37068414.png",
+  "historyId": "B7VE6nAegmWgecBfUabe",
+  "model": "nano-banana-2"
+ },
+ "shop_bakery": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903026553_930df8cf_1791903026727_e646dd84.png",
+  "historyId": "kbtX3N3e2fxBUwzbKkHp",
+  "model": "nano-banana-2"
+ },
+ "shop_books": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903073515_19674770_1791903073744_e790aaab.png",
+  "historyId": "GeN35AYdOC3kasMwndPe",
+  "model": "nano-banana-2"
+ },
+ "shop_butcher": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903069954_45b63ae9_1791903070243_320b4851.png",
+  "historyId": "Edi1lZdfDsbRXnVPPwY0",
+  "model": "nano-banana-2"
+ },
+ "shop_cafe": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903029770_cbe643ff_1791903030383_b4e744e4.png",
+  "historyId": "lm3YNLlGQis24MiQ1cO2",
+  "model": "nano-banana-2"
+ },
+ "shop_fashion": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903076467_9085ed1a_1791903076638_f92512b6.png",
+  "historyId": "r7o814FLUzjNfMgUjCPx",
+  "model": "nano-banana-2"
+ },
+ "shop_flowers": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903032726_f4c12d10_1791903032942_a7556154.png",
+  "historyId": "UqPAUu9kO9povUv5zM2h",
+  "model": "nano-banana-2"
+ },
+ "shop_general": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903079258_bc926d35_1791903079483_915b8d82.png",
+  "historyId": "fJbPch1NSY4YkqF7PCqz",
+  "model": "nano-banana-2"
+ },
+ "shop_grocer": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903027863_3bf9d9c8_1791903027940_71d1ebb3.png",
+  "historyId": "xtPbu6m4Gv4rgLQonIyc",
+  "model": "nano-banana-2"
+ },
+ "shop_icecream": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903075541_dabefada_1791903075611_953c8755.png",
+  "historyId": "Rox6EXK0vFLRaRjAKSep",
+  "model": "nano-banana-2"
+ },
+ "shop_pharmacy": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903072493_d989c804_1791903072778_ba4b450e.png",
+  "historyId": "8d2x2LhlsRWtN9EUZpv4",
+  "model": "nano-banana-2"
+ },
+ "shopdoor": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903078754_c9264d0e_1791903079245_93c83e4d.png",
+  "historyId": "GN0ySsw6EvwY3ajKrFNA",
+  "model": "nano-banana-2"
+ },
+ "stone_door": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903131357_f27686e9_1791903131458_64fe4b44.png",
+  "historyId": "VzCIxF583h0naCxFmE1t",
+  "model": "nano-banana-2"
+ },
+ "stone_wall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903128837_e7112d2f_1791903128953_d107ef3f.png",
+  "historyId": "YChQ1SkAGWhPwlWJC5uq",
+  "model": "nano-banana-2"
+ },
+ "stone_win": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791903127699_83a1af03_1791903128030_e74b2e71.png",
+  "historyId": "khRIWqlufWKJXKtxahgU",
+  "model": "nano-banana-2"
+ }
+}

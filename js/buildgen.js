@@ -163,8 +163,11 @@ function awning(B, x0, x1, yTop, z, depth, drop, cols) {
   B.tri('solid', [x1, yl - 0.022, zo], [x1, yTop, z], [x1, yl, zo], C(cols[0]));
   B.tri('solid', [x0, yTop, z], [x0, yl - 0.022, zo], [x0, yl, zo], C(cols[0]));
 }
+let PHOTO = false;
+export function setPhotoMode(on) { PHOTO = on; }
 function hedge(B, x0, z0, x1, z1, h = 0.07, c = '#4b7a33') {
-  B.box('grass', x0, 0, z0, x1, h, z1, C(c), { s: 0.5 });
+  if (PHOTO) B.box('hedge', x0, 0, z0, x1, h, z1, C('#a9c49a'), { s: 0.18 });
+  else B.box('grass', x0, 0, z0, x1, h, z1, C(c), { s: 0.5 });
 }
 function picketFence(B, x0, x1, z, gapX = null, h = 0.06, c = WHITE) {
   for (let x = x0; x <= x1 + 1e-6; x += 0.042) {

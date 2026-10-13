@@ -3,13 +3,19 @@ import { ZONE_INFO } from './config.js';
 import { MARGIN } from './world.js';
 
 const C = col;
-const SIDEWALK = C('#ddd6ca');
+let SIDEWALK = C('#ddd6ca');
 const CURB = C('#cfc9bf');
 const ASPH = C('#ffffff');
 const MARK = C('#f4f2ec');
-const BANK = C('#9c968a');
-const QUAY = C('#c9c1b2');
-const G1 = C('#e4ecd2'), G2 = C('#c9d6ac'), G3 = C('#d8dfbe');
+let BANK = C('#9c968a');
+let QUAY = C('#c9c1b2');
+let G1 = C('#e4ecd2'), G2 = C('#c9d6ac'), G3 = C('#d8dfbe');
+// the photographic textures already carry their colour, so tints stay close to white
+export function setGroundPhoto(on) {
+  if (!on) return;
+  SIDEWALK = C('#f4f1ec'); BANK = C('#c9c4bb'); QUAY = C('#ebe6dd');
+  G1 = C('#eef0e4'); G2 = C('#cfd8bd'); G3 = C('#e4e3cf');
+}
 
 function grassTint(x, z) {
   const n = fbm(x * 0.13, z * 0.13, 42, 3);

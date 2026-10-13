@@ -257,9 +257,9 @@ function stoneBlocks(p, base, rng, rowH = 12.5) {
 
 // --------------------------------------------------------------- the atlas
 export class Atlas {
-  constructor(cellPx) {
+  constructor(cellPx, ecellPx) {
     this.cell = cellPx;
-    this.ecell = Math.max(32, cellPx / 2);
+    this.ecell = ecellPx || Math.max(32, cellPx / 2);
     this.size = cellPx * 16;
     this.cells = {};
     this.next = 0;
@@ -624,10 +624,6 @@ function buildAtlas(cellPx) {
       ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(50, 50); ctx.lineTo(64, 56); ctx.stroke();
     });
   });
-  A.add('redcross', (p) => {
-    p.rect(0, 0, 100, 100, '#f7f7f5', 0.6, 0, '#fafafa');
-    p.rect(38, 14, 24, 72, '#d8161c', 0.6, 0, '#ff2a2a'); p.rect(14, 38, 72, 24, '#d8161c', 0.6, 0, '#ff2a2a');
-  });
   A.add('hospital_win', (p, rng) => {
     p.rect(0, 0, 100, 100, '#f4f4f1', 0.85); p.noise(0, 0, 100, 100, 100, 0.03);
     windowFrame(p, 12, 20, 76, 50, '#9aa6ae', { fw: 2, emis: 'cool', curtain: rng() < 0.4 });
@@ -655,6 +651,17 @@ function buildAtlas(cellPx) {
   A.add('raw_brick', (p, rng) => poroton(p, rng));
   A.add('raw_brick_win', (p, rng) => { poroton(p, rng); p.rect(30, 24, 40, 50, '#2c2622', 0.95); p.rect(28, 20, 44, 5, '#9a9a94', 0.9); });
 
+  paintSigns(A);
+  A.build();
+  return A;
+}
+
+// signs carry German lettering, so they are always painted here (also on top of the photo atlas)
+function paintSigns(A) {
+  A.add('redcross', (p) => {
+    p.rect(0, 0, 100, 100, '#f7f7f5', 0.6, 0, '#fafafa');
+    p.rect(38, 14, 24, 72, '#d8161c', 0.6, 0, '#ff2a2a'); p.rect(14, 38, 72, 24, '#d8161c', 0.6, 0, '#ff2a2a');
+  });
   // ---- signs (4 cells wide)
   for (const k in SIGNS) {
     const s = SIGNS[k];
@@ -687,8 +694,6 @@ function buildAtlas(cellPx) {
       }
     }, 4);
   }
-  A.build();
-  return A;
 }
 
 // --------------------------------------------------------------- tileables
@@ -830,6 +835,74 @@ function aoTex(size) {
   return c;
 }
 
+function loadImage(url) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.decoding = 'async';
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error(`Bild fehlt: ${url}`));
+    im.src = url;
+  });
+}
+
+// realistic textures generated with OpenArt (see tools/process_assets.py)
+async function loadPhotoTextures(quality) {
+  const big = (quality.atlas || 128) >= 256;
+  const base = 'assets/';
+  const res = await fetch(base + 'atlas/atlas.json');
+  if (!res.ok) throw new Error('atlas.json fehlt');
+  const manifest = await res.json();
+  const [ci, ei, oi] = await Promise.all([
+    loadImage(`${base}atlas/facade_color_${big ? '4k' : '2k'}.jpg`),
+    loadImage(`${base}atlas/facade_emis_${big ? '2k' : '1k'}.jpg`),
+    loadImage(`${base}atlas/facade_orm_${big ? '2k' : '1k'}.jpg`),
+  ]);
+  const A = new Atlas(ci.width / 16, ei.width / 16);
+  A.cColor.getContext('2d').drawImage(ci, 0, 0);
+  A.cEmis.getContext('2d').drawImage(ei, 0, 0);
+  A.cOrm.getContext('2d').drawImage(oi, 0, 0);
+  let maxIdx = 0;
+  for (const [n, idx] of Object.entries(manifest.cells)) { A.cells[n] = { idx, w: 1 }; maxIdx = Math.max(maxIdx, idx); }
+  A.next = maxIdx + 1;
+  A.nextSign = manifest.signStart;
+  paintSigns(A);
+  A.build();
+  A.photo = true;
+  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'leaves', 'needles'];
+  const imgs = await Promise.all(names.map((n) => loadImage(`${base}tex/${n}.jpg`)));
+  const out = { atlas: A };
+  names.forEach((n, i) => {
+    const t = new THREE.Texture(imgs[i]);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    t.needsUpdate = true;
+    out[n] = t;
+  });
+  return {
+    atlas: A, grass: out.grass, cobble: out.cobble, asphalt: out.asphalt, dirt: out.dirt, sand: out.sand,
+    gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal,
+    leaves: out.leaves, needles: out.needles, photo: true,
+  };
+}
+
+function commonTextures(T) {
+  T.waterNormal = tex(waterNormalTex(256), false, true);
+  T.glow = tex(radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']]));
+  T.pool = tex(radialTex(128, [[0, 'rgba(255,214,150,0.9)'], [0.4, 'rgba(255,190,110,0.35)'], [1, 'rgba(255,170,90,0)']]));
+  T.soft = tex(radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.5, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']]));
+  T.ao = tex(aoTex(64), false);
+  T.ao.colorSpace = THREE.NoColorSpace;
+  return T;
+}
+
+export async function loadTextures(quality) {
+  if (!quality.procedural) {
+    try { return commonTextures(await loadPhotoTextures(quality)); } catch (e) { console.warn('Fotoreale Texturen nicht verfügbar, nutze prozedurale.', e); }
+  }
+  return makeTextures(quality);
+}
+
 export function makeTextures(quality) {
   const cellPx = quality.atlas || 128;
   const atlas = buildAtlas(cellPx);
@@ -845,12 +918,7 @@ export function makeTextures(quality) {
     field: tex(fieldTex(gs / 2), true, true),
     roofTile: tex(roofTileTex(256), true, true),
     roofMetal: tex(metalRoofTex(128), true, true),
-    waterNormal: tex(waterNormalTex(256), false, true),
-    glow: tex(radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']])),
-    pool: tex(radialTex(128, [[0, 'rgba(255,214,150,0.9)'], [0.4, 'rgba(255,190,110,0.35)'], [1, 'rgba(255,170,90,0)']])),
-    soft: tex(radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.5, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']])),
-    ao: tex(aoTex(64), false),
+    photo: false,
   };
-  T.ao.colorSpace = THREE.NoColorSpace;
-  return T;
+  return commonTextures(T);
 }

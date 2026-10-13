@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { makeTextures } from './textures.js';
+import { loadTextures } from './textures.js';
+import { setGroundPhoto } from './ground.js';
 import { makeMaterials, makeEnvironment, U } from './materials.js';
-import { initBuildgen } from './buildgen.js';
+import { initBuildgen, setPhotoMode } from './buildgen.js';
 import { Environment } from './env.js';
 import { IsoCamera } from './camera.js';
 import { Game } from './game.js';
@@ -20,18 +21,25 @@ import { fmtNum, pick } from './util.js';
 
 const params = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 720;
+const tablet = coarse && Math.min(screen.width, screen.height) >= 700;
 const QUALITY = {
+  tablet: { atlas: 256, ground: 512, shadowMap: 2048, pixelRatio: Math.min(devicePixelRatio, 1.5), shadows: true, people: 320, cars: 120 },
   high: { atlas: 256, ground: 512, shadowMap: 4096, pixelRatio: Math.min(devicePixelRatio, 2), shadows: true, people: 520, cars: 170 },
   mid: { atlas: 128, ground: 512, shadowMap: 2048, pixelRatio: Math.min(devicePixelRatio, 1.6), shadows: true, people: 260, cars: 100 },
   low: { atlas: 128, ground: 256, shadowMap: 1024, pixelRatio: 1, shadows: false, people: 120, cars: 50 },
 };
-const Q = QUALITY[params.get('q')] || (coarse ? QUALITY.mid : QUALITY.high);
+const Q = QUALITY[params.get('q')] || (tablet ? QUALITY.tablet : coarse ? QUALITY.mid : QUALITY.high);
+if (params.has('procedural')) Q.procedural = true;
 const manual = params.has('manual');
 
 function storage(key, val) {
   try { if (val === undefined) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) { return null; }
   return null;
 }
+
+// keep Safari from zooming the page with pinch or double tap; the map handles its own gestures
+for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
 async function boot(hotData) {
   try { await document.fonts?.load('600 40px Fredoka'); } catch (e) { /* fonts are optional */ }
@@ -45,8 +53,9 @@ async function boot(hotData) {
 
   const scene = new THREE.Scene();
   scene.environment = makeEnvironment(renderer);
-  const T = makeTextures(Q);
+  const T = await loadTextures(Q);
   initBuildgen(T.atlas);
+  setPhotoMode(T.photo); setGroundPhoto(T.photo);
   const M = makeMaterials(T);
   const env = new Environment(scene, renderer, Q);
   const cam = new IsoCamera(MAP_N);
