@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { vehicleTextures } from './vehicles.js';
 import { mulberry32 } from './util.js';
 
 // ---------------------------------------------------------------------------
@@ -85,11 +86,12 @@ class Painter {
     this.cc = cc; this.ec = ec; this.oc = oc; this.cell = cell; this.ecell = ecell;
     this.rng = mulberry32(1234);
   }
-  begin(idx, wCells = 1) {
+  begin(idx, wCells = 1, half = -1) {
     const cx = idx % 16, cy = Math.floor(idx / 16);
     const s = this.cell / 100, se = this.ecell / 100;
     for (const [ctx, sc, cs] of [[this.cc, s, this.cell], [this.oc, se, this.ecell], [this.ec, se, this.ecell]]) {
-      ctx.setTransform(sc, 0, 0, sc, cx * cs, cy * cs);
+      if (half >= 0) ctx.setTransform(sc, 0, 0, sc / 2, cx * cs, cy * cs + half * cs / 2);
+      else ctx.setTransform(sc, 0, 0, sc, cx * cs, cy * cs);
       ctx.save();
       ctx.beginPath(); ctx.rect(0, 0, 100 * wCells, 100); ctx.clip();
     }
@@ -256,6 +258,17 @@ function stoneBlocks(p, base, rng, rowH = 12.5) {
 }
 
 // --------------------------------------------------------------- the atlas
+// the procedural fallback atlas lacks some photo cells: map them to close relatives
+function cellAlias(name) {
+  const m = /^win_[aorgb]_(\w+)$/.exec(name);
+  if (m) return (name[4] === 'r' || name[4] === 'g' || name[4] === 'b' ? 'win_s_' : 'win_p_') + m[1];
+  return {
+    wood_win: 'fw_win_brown', wood_wall: 'fw_wall_brown', slate_win: 'win_s_white', slate_wall: 'wall_white',
+    rubble_win: 'stone_win_beige', rubble_door: 'stone_door', bfw_win: 'fw_win_red', bfw_wall: 'fw_wall_red',
+    modern_win: 'apt_win_white', garage_wood: 'garage_grey',
+  }[name];
+}
+
 export class Atlas {
   constructor(cellPx, ecellPx) {
     this.cell = cellPx;
@@ -263,7 +276,7 @@ export class Atlas {
     this.size = cellPx * 16;
     this.cells = {};
     this.next = 0;
-    this.nextSign = 16 * 8;
+    this.nextSign = 16 * 12; // signs: two per 4x1 block, stacked in half-height slots
     this.cColor = canvas(this.size);
     this.cEmis = canvas(this.ecell * 16);
     this.cOrm = canvas(this.ecell * 16);
@@ -275,20 +288,26 @@ export class Atlas {
     this.p = new Painter(cc, ec, oc, this.cell, this.ecell);
   }
   add(name, fn, wCells = 1) {
-    let idx;
-    if (wCells > 1) { idx = this.nextSign; this.nextSign += wCells; }
-    else idx = this.next++;
-    this.cells[name] = { idx, w: wCells };
-    this.p.rng = mulberry32(idx * 7919 + 13);
-    this.p.begin(idx, wCells);
+    let idx, half = -1;
+    if (wCells > 1) {
+      if (this.signHalf === 1) { idx = this.signIdx; half = 1; this.signHalf = 0; }
+      else { idx = this.nextSign; this.nextSign += wCells; half = 0; this.signHalf = 1; this.signIdx = idx; }
+    } else idx = this.next++;
+    this.cells[name] = { idx, w: wCells, half };
+    this.p.rng = mulberry32(idx * 7919 + 13 + (half > 0 ? 7 : 0));
+    this.p.begin(idx, wCells, half);
     fn(this.p, this.p.rng);
     this.p.end();
   }
   // [u0, v0, u1, v1] (v0 bottom)
   uv(name) {
-    const c = this.cells[name] || this.cells.wall_cream;
+    const c = this.cells[name] || this.cells[cellAlias(name)] || this.cells.wall_cream;
     const cx = c.idx % 16, cy = Math.floor(c.idx / 16);
     const inset = 0.012 / 16;
+    if (c.half >= 0) {
+      const top = cy + c.half * 0.5;
+      return [cx / 16 + inset, 1 - (top + 0.5) / 16 + inset / 2, (cx + c.w) / 16 - inset, 1 - top / 16 - inset / 2];
+    }
     return [cx / 16 + inset, 1 - (cy + 1) / 16 + inset, (cx + c.w) / 16 - inset, 1 - cy / 16 - inset];
   }
   has(name) { return !!this.cells[name]; }
@@ -868,7 +887,7 @@ async function loadPhotoTextures(quality) {
   paintSigns(A);
   A.build();
   A.photo = true;
-  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'leaves', 'needles'];
+  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'roof_slate', 'roof_pantile', 'leaves', 'needles'];
   const imgs = await Promise.all(names.map((n) => loadImage(`${base}tex/${n}.jpg`)));
   const out = { atlas: A };
   names.forEach((n, i) => {
@@ -881,12 +900,14 @@ async function loadPhotoTextures(quality) {
   });
   return {
     atlas: A, grass: out.grass, cobble: out.cobble, asphalt: out.asphalt, dirt: out.dirt, sand: out.sand,
-    gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal,
+    gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal, roofSlate: out.roof_slate, roofPantile: out.roof_pantile,
     leaves: out.leaves, needles: out.needles, photo: true,
   };
 }
 
-function commonTextures(T) {
+function commonTextures(T, quality) {
+  const V = vehicleTextures(quality);
+  T.veh = V.map; T.vehOrm = V.orm;
   T.waterNormal = tex(waterNormalTex(256), false, true);
   T.glow = tex(radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']]));
   T.pool = tex(radialTex(128, [[0, 'rgba(255,214,150,0.9)'], [0.4, 'rgba(255,190,110,0.35)'], [1, 'rgba(255,170,90,0)']]));
@@ -898,7 +919,7 @@ function commonTextures(T) {
 
 export async function loadTextures(quality) {
   if (!quality.procedural) {
-    try { return commonTextures(await loadPhotoTextures(quality)); } catch (e) { console.warn('Fotoreale Texturen nicht verfügbar, nutze prozedurale.', e); }
+    try { return commonTextures(await loadPhotoTextures(quality), quality); } catch (e) { console.warn('Fotoreale Texturen nicht verfügbar, nutze prozedurale.', e); }
   }
   return makeTextures(quality);
 }
@@ -920,5 +941,5 @@ export function makeTextures(quality) {
     roofMetal: tex(metalRoofTex(128), true, true),
     photo: false,
   };
-  return commonTextures(T);
+  return commonTextures(T, quality);
 }

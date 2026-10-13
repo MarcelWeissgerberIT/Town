@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { vehicleMaterial } from './vehicles.js';
 
 // shared uniforms driven by the day/night cycle
 export const U = {
@@ -36,6 +37,8 @@ export function makeMaterials(T) {
   });
   litInject(M.facade, 'atlas');
   M.roof = new THREE.MeshStandardMaterial({ map: T.roofTile, vertexColors: true, roughness: 0.82 });
+  M.slate = new THREE.MeshStandardMaterial({ map: T.roofSlate || T.roofTile, vertexColors: true, roughness: 0.6, metalness: 0.05 });
+  M.pantile = new THREE.MeshStandardMaterial({ map: T.roofPantile || T.roofTile, vertexColors: true, roughness: 0.8 });
   M.metal = new THREE.MeshStandardMaterial({ map: T.roofMetal, vertexColors: true, roughness: 0.42, metalness: 0.55 });
   M.flat = new THREE.MeshStandardMaterial({ map: T.gravel, vertexColors: true, roughness: 0.95 });
   M.solid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78 });
@@ -60,6 +63,8 @@ export function makeMaterials(T) {
   } else {
     M.hedge = M.grass;
   }
+  M.veh = vehicleMaterial({ map: T.veh, orm: T.vehOrm });
+  M.beacon = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.1 });
   M.ao = new THREE.MeshBasicMaterial({ map: T.ao, transparent: true, depthWrite: false, opacity: 0.55, color: 0x000000 });
   M.ao.color.set(0x1a1410);
   M.water = new THREE.MeshStandardMaterial({

@@ -1,25 +1,30 @@
 import * as THREE from 'three';
 import { Builder, packedToGeometry } from './geom.js';
-import * as MD from './models.js';
+import { VEH, VEH_LEN } from './vehicles.js';
 import { Nav } from './nav.js';
 import { DIRS, hash2, mulberry32, pick, clamp, col } from './util.js';
 import { CAR_COLS } from './config.js';
 import { U } from './materials.js';
 
+const W1 = [1, 1, 1];
+const vt = (name, kind, speed, cap, color) => ({ name, build: (B) => VEH[kind](B, 'veh', W1), speed, len: VEH_LEN[kind], cap, color });
 const TYPES = {
-  car: { name: 'Auto', build: (B) => MD.car(B, 'paint'), speed: 0.85, len: 0.4, cap: 220 },
-  taxi: { name: 'Taxi', build: (B) => MD.car(B, 'paint', [1, 1, 1], { taxi: true }), speed: 0.85, len: 0.4, cap: 20, color: '#efe6c8' },
-  police: { name: 'Polizeistreife', build: (B) => MD.car(B, 'paint', [1, 1, 1], { police: true }), speed: 0.9, len: 0.4, cap: 20, color: '#f4f4f2' },
-  bus: { name: 'Linienbus', build: (B) => MD.bus(B, 'paint', [1, 1, 1]), speed: 0.62, len: 0.92, cap: 12, color: '#f2c230' },
-  garbage: { name: 'Müllabfuhr', build: (B) => MD.garbageTruck(B, 'paint', [1, 1, 1]), speed: 0.55, len: 0.7, cap: 10, color: '#f07b1d' },
-  fire: { name: 'Feuerwehr', build: (B) => MD.fireTruck(B, 'paint', [1, 1, 1]), speed: 1.0, len: 0.8, cap: 8, color: '#d42a1f' },
-  ambulance: { name: 'Rettungswagen', build: (B) => MD.van(B, 'paint', [1, 1, 1], { ambulance: true }), speed: 1.0, len: 0.5, cap: 8, color: '#f6f6f2' },
-  van: { name: 'Lieferwagen', build: (B) => MD.van(B, 'paint'), speed: 0.75, len: 0.5, cap: 40 },
-  post: { name: 'Postauto', build: (B) => MD.van(B, 'paint', [1, 1, 1], { post: true }), speed: 0.75, len: 0.5, cap: 6, color: '#ffcc00' },
-  truck: { name: 'Lastwagen', build: (B) => MD.truck(B, 'paint'), speed: 0.6, len: 0.84, cap: 30, color: '#e9e9e6' },
-  mixer: { name: 'Betonmischer', build: (B) => MD.mixer(B, 'paint'), speed: 0.55, len: 0.7, cap: 16, color: '#f2f2f0' },
-  moving: { name: 'Umzugswagen', build: (B) => MD.van(B, 'paint'), speed: 0.7, len: 0.5, cap: 12, color: '#3f7fbf' },
+  car: vt('Auto', 'car', 0.85, 90),
+  hatch: vt('Kleinwagen', 'hatch', 0.82, 80),
+  kombi: vt('Kombi', 'kombi', 0.85, 70),
+  taxi: vt('Taxi', 'taxi', 0.85, 20, '#efe6c8'),
+  police: vt('Polizeistreife', 'police', 0.9, 20, '#f4f5f4'),
+  bus: vt('Linienbus', 'bus', 0.62, 12, '#f2c230'),
+  garbage: vt('Müllabfuhr', 'garbage', 0.55, 10, '#f07b1d'),
+  fire: vt('Feuerwehr', 'fire', 1.0, 8, '#d42a1f'),
+  ambulance: vt('Rettungswagen', 'ambulance', 1.0, 8, '#f6f6f2'),
+  van: vt('Lieferwagen', 'van', 0.75, 40),
+  post: vt('Postauto', 'post', 0.75, 6, '#ffcc00'),
+  truck: vt('Lastwagen', 'truck', 0.6, 30),
+  mixer: vt('Betonmischer', 'mixer', 0.55, 16, '#e6a52a'),
+  moving: vt('Umzugswagen', 'moving', 0.7, 12, '#2f6db5'),
 };
+const CAR_KINDS = ['car', 'car', 'hatch', 'hatch', 'kombi'];
 
 const LANE = 0.15;
 const R = (d) => [-d[1], d[0]];
@@ -73,7 +78,7 @@ export class Traffic {
     this.spawnTimer = 0;
     this.version = -1;
     this.signals = new Map();
-    this.matPaint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.35 });
+    this.matBeacon = new THREE.MeshBasicMaterial({ vertexColors: true });
     this.meshes = {};
     const m4 = new THREE.Matrix4();
     for (const t in TYPES) {
@@ -82,12 +87,12 @@ export class Traffic {
       const pk = B.pack();
       const parts = [];
       for (const k in pk) {
-        const mat = k === 'paint' ? this.matPaint : M[k];
+        const mat = k === 'beacon' ? this.matBeacon : M[k];
         if (!mat) continue;
         const im = new THREE.InstancedMesh(packedToGeometry(pk[k]), mat, TYPES[t].cap);
         im.count = 0; im.castShadow = true; im.receiveShadow = true;
         im.frustumCulled = false;
-        if (k === 'paint') { im.setColorAt(0, new THREE.Color(1, 1, 1)); }
+        if (k === 'veh' || k === 'beacon') im.setColorAt(0, new THREE.Color(1, 1, 1));
         for (let i = 0; i < TYPES[t].cap; i++) im.setMatrixAt(i, m4);
         scene.add(im);
         parts.push({ k, im });
@@ -218,7 +223,7 @@ export class Traffic {
     const cars = this.vehicles.filter((v) => v.role === 'trip').length;
     if (cars < target && homes.length) {
       const r = rng();
-      const type = r < 0.06 ? 'taxi' : r < 0.18 ? 'van' : 'car';
+      const type = r < 0.06 ? 'taxi' : r < 0.18 ? 'van' : pick(rng, CAR_KINDS);
       const a = pick(rng, this.nearView(homes, view));
       if (rng() < 0.18) this.trip(type, rng() < 0.5 ? a : null, rng() < 0.5 ? null : a);
       else this.trip(type, a, pick(rng, this.nearView(work.length ? work : homes, view)));
@@ -453,9 +458,11 @@ export class Traffic {
       e.set(0, ang, 0); q.setFromEuler(e);
       p.set(v.pos[0], 0.003, v.pos[1]); s.set(1, 1, 1);
       m.compose(p, q, s);
+      const bi = this.beaconLevel(v);
       for (const part of parts) {
         part.im.setMatrixAt(n, m);
-        if (part.k === 'paint') part.im.setColorAt(n, v.c);
+        if (part.k === 'veh') part.im.setColorAt(n, v.c);
+        else if (part.k === 'beacon') { c.setScalar(bi); part.im.setColorAt(n, c); }
       }
       if (night > 0.05 && pools < 400) {
         const l = Math.hypot(v.pos[2], v.pos[3]) || 1;
@@ -481,6 +488,14 @@ export class Traffic {
       this.lightMesh.setColorAt(i, cols[this.signal(h.k, h.axis)]);
     }
     if (this.lightMesh.instanceColor) this.lightMesh.instanceColor.needsUpdate = true;
+  }
+
+  // blue lights flash on emergency runs, amber lights turn while collecting
+  beaconLevel(v) {
+    const t = this.time * 7 + v.id * 1.7;
+    if (v.data.siren) return (t % 2) < 1 ? 1.5 : 0.18;
+    if (v.type === 'garbage' && v.role === 'rounds') return 0.7 + 0.9 * Math.max(0, Math.sin(t * 0.9));
+    return 0.45;
   }
 
   pick(ray) {

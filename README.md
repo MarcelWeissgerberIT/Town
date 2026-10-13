@@ -4,11 +4,23 @@ Ein kleines Dorf am Fluss wird zur Metropole. Lindenau ist eine Stadtbausimulati
 hochauflösender 3D-Grafik in isometrischer Ansicht: Man kann bis auf einzelne Menschen heranzoomen,
 den Baustellen beim Wachsen zusehen und dem Leben in den Straßen folgen.
 
-Die Oberflächen sind fotorealistisch: Fassaden (Putz in acht Farben, Fachwerk, Klinker, Läden mit
-Auslagen, moderne Wohnhäuser, Glasfassaden, Kirchenfenster), Dachziegel, Kopfsteinpflaster, Asphalt,
-Rasen und Laub wurden mit **OpenArt** generiert und zu einem Fassaden-Atlas mit passender
-Nachtbeleuchtung verarbeitet. Ladenschilder mit deutscher Beschriftung, Gebäudeformen, Fahrzeuge und
-Menschen entstehen im Spiel prozedural.
+Die Oberflächen sind fotorealistisch: Fassaden (Putz in acht Farben mit sieben Fensterstilen –
+Klappläden in Grün, Rot und Taubenblau, Segmentbögen, Gründerzeit-Giebel, französische Balkone –,
+Fachwerk, norddeutsches Backstein-Fachwerk, Schiefer, Lärchenholz, Bruchstein, Klinker, moderne
+Häuser, Läden mit Auslagen, Glasfassaden, Kirchenfenster), Biberschwanz-, Hohlpfannen- und
+Schieferdächer, Kopfsteinpflaster, Asphalt, Rasen und Laub wurden mit **OpenArt** generiert und zu
+einem Fassaden-Atlas mit passender Nachtbeleuchtung verarbeitet. Ladenschilder mit deutscher
+Beschriftung, Gebäudeformen, Fahrzeuge und Menschen entstehen im Spiel prozedural.
+
+Kein Haus gleicht dem anderen: Traufhäuser mit Gauben oder Zwerchhaus, Giebelhäuser, Winkelhäuser,
+Villen mit Erker oder Eckturm und Mansarddach, Siedlungshäuser mit Garage und Auto in der Einfahrt,
+Doppelhäuser in zwei Farben, moderne Kuben mit Carport und Pool, Bauernhäuser mit Traktor,
+Altstadtzeilen aus schmalen Giebelhäusern und Gründerzeit- und Klinkerblöcke. Dazu Gärten mit
+Trampolin, Gartenhaus, Gewächshaus, Sandkasten, Wäscheleine, Fahrrädern und Jägerzaun.
+
+Die Fahrzeuge sind modellierte Karosserien mit gemalten Details: Limousine, Kleinwagen, Kombi,
+Taxi, Polizeistreife mit Lichtbalken, Rettungswagen, Feuerwehr mit Drehleiter, Müllwagen,
+Linienbus, Postauto, Umzugswagen, Lkw und Betonmischer. Blaulichter blinken bei Einsätzen.
 
 ## Spielen
 
@@ -64,6 +76,10 @@ Three.js (r169) wird per Import-Map von jsDelivr geladen.
 
 Optionale URL-Parameter: `?q=low|mid|tablet|high` (Grafikqualität), `?fresh` (Spielstand ignorieren),
 `?procedural` (ohne Fotoassets).
+
+Code-Überblick: `js/houses.js` enthält die Hausarchetypen (Stile, Dachformen, Gauben, Gärten),
+`js/vehicles.js` die Fahrzeugmodelle samt prozeduralem Lackier-Atlas, `js/buildgen.js` die übrigen
+Gebäude.
 
 ## Assets
 

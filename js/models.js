@@ -1,126 +1,13 @@
 import { col, shade, hash2 } from './util.js';
 
-// Small reusable models (vehicles, props, trees, people parts) drawn into a Builder
-// in local coordinates. Vehicles face +x and sit on y = 0.
+// Small reusable models (props, trees, people parts) drawn into a Builder in
+// local coordinates. Vehicles live in vehicles.js.
 
 const C = col;
 const DARK = C('#1d1f22');
 const TIRE = C('#222428');
 const GLASSC = C('#26323d');
 const CHROME = C('#c9ccd0');
-
-function wheels(B, x0, x1, hw, r = 0.032, w = 0.028) {
-  for (const x of [x0, x1]) for (const z of [-hw, hw]) {
-    B.box('solid', x - r, 0, z - w / 2, x + r, r * 2, z + w / 2, TIRE);
-    B.box('solid', x - r * 0.45, r * 0.55, z - w / 2 - 0.002, x + r * 0.45, r * 1.45, z + w / 2 + 0.002, CHROME);
-  }
-}
-function lights(B, xf, xb, y0, y1, hw, lw = 0.035) {
-  B.box('glow', xf - 0.006, y0, -hw, xf + 0.002, y1, -hw + lw, C('#fff3d1'), { lit: 0.02 });
-  B.box('glow', xf - 0.006, y0, hw - lw, xf + 0.002, y1, hw, C('#fff3d1'), { lit: 0.02 });
-  B.box('glow', xb - 0.002, y0, -hw, xb + 0.006, y1, -hw + lw, C('#d8261c'), { lit: 0.02 });
-  B.box('glow', xb - 0.002, y0, hw - lw, xb + 0.006, y1, hw, C('#d8261c'), { lit: 0.02 });
-}
-
-// paint bucket name pb: 'paint' for instanced (white, tinted per instance) or 'shiny'
-export function car(B, pb = 'paint', pc = [1, 1, 1], opts = {}) {
-  const L = 0.19, hw = 0.082;
-  B.box(pb, -L, 0.03, -hw, L, 0.085, hw, pc);
-  // bonnet slope + cabin
-  B.box('glass', -0.1, 0.085, -hw + 0.008, 0.075, 0.138, hw - 0.008, GLASSC);
-  B.box(pb, -0.095, 0.138, -hw + 0.01, 0.065, 0.152, hw - 0.01, pc);
-  B.box('solid', L - 0.012, 0.035, -hw + 0.01, L + 0.004, 0.05, hw - 0.01, DARK);
-  B.box('solid', -L - 0.004, 0.035, -hw + 0.01, -L + 0.012, 0.05, hw - 0.01, DARK);
-  wheels(B, -0.115, 0.115, hw - 0.012);
-  lights(B, L, -L, 0.06, 0.077, hw - 0.005);
-  if (opts.taxi) B.box('glow', -0.02, 0.152, -0.03, 0.02, 0.172, 0.03, C('#f7e3a1'), { lit: 0.01 });
-  if (opts.police) {
-    B.box('solid', -L + 0.002, 0.055, -hw - 0.002, L - 0.002, 0.07, hw + 0.002, C('#1f5fae'));
-    B.box('glow', -0.03, 0.152, -0.05, 0.03, 0.17, 0, C('#2f7bff'), { lit: 0.01 });
-    B.box('glow', -0.03, 0.152, 0, 0.03, 0.17, 0.05, C('#2f7bff'), { lit: 0.01 });
-  }
-}
-
-export function van(B, pb = 'paint', pc = [1, 1, 1], opts = {}) {
-  const L = 0.24, hw = 0.09;
-  B.box(pb, -L, 0.03, -hw, L - 0.05, 0.2, hw, pc);
-  B.box(pb, L - 0.05, 0.03, -hw, L, 0.11, hw, pc);
-  B.box('glass', L - 0.09, 0.11, -hw + 0.005, L - 0.03, 0.18, hw - 0.005, GLASSC);
-  wheels(B, -0.15, 0.16, hw - 0.012);
-  lights(B, L, -L, 0.06, 0.08, hw - 0.005);
-  if (opts.ambulance) {
-    B.box('solid', -L - 0.002, 0.1, -hw - 0.002, L - 0.048, 0.125, hw + 0.002, C('#e8471f'));
-    B.box('glow', -0.04, 0.2, -0.06, 0.04, 0.22, 0.06, C('#2f7bff'), { lit: 0.01 });
-    B.box('solid', -0.02, 0.135, hw + 0.001, 0.02, 0.18, hw + 0.004, C('#d8161c'));
-    B.box('solid', -0.045, 0.15, hw + 0.001, 0.045, 0.165, hw + 0.004, C('#d8161c'));
-  }
-  if (opts.post) B.box('solid', -L - 0.002, 0.04, -hw - 0.002, L - 0.048, 0.06, hw + 0.002, C('#1d1d1d'));
-}
-
-export function bus(B, pb = 'paint', pc = C('#f2c230')) {
-  const L = 0.44, hw = 0.1;
-  B.box(pb, -L, 0.035, -hw, L, 0.27, hw, pc);
-  B.box('glass', -L + 0.04, 0.13, -hw - 0.002, L - 0.02, 0.24, hw + 0.002, GLASSC);
-  B.box('glass', L - 0.01, 0.09, -hw + 0.01, L + 0.003, 0.25, hw - 0.01, GLASSC);
-  B.box('solid', -L + 0.05, 0.27, -hw + 0.02, -L + 0.25, 0.3, hw - 0.02, C('#d9d9d9'));
-  B.box('glow', L - 0.005, 0.245, -0.06, L + 0.004, 0.265, 0.06, C('#ffb347'), { lit: 0.01 });
-  wheels(B, -0.3, 0.3, hw - 0.012, 0.036);
-  lights(B, L, -L, 0.06, 0.085, hw - 0.005);
-}
-
-export function truck(B, pb = 'paint', pc = C('#e9e9e6'), opts = {}) {
-  const hw = 0.1;
-  // cab
-  B.box(pb, 0.26, 0.04, -hw, 0.4, 0.24, hw, opts.cab || C('#2b5d9b'));
-  B.box('glass', 0.395, 0.14, -hw + 0.01, 0.402, 0.22, hw - 0.01, GLASSC);
-  // trailer
-  B.box(pb, -0.42, 0.06, -hw, 0.24, 0.3, hw, pc);
-  B.box('solid', -0.42, 0.035, -hw + 0.01, 0.4, 0.06, hw - 0.01, DARK);
-  wheels(B, -0.34, 0.32, hw - 0.012, 0.035);
-  wheels(B, -0.26, 0.32, hw - 0.012, 0.035);
-  lights(B, 0.4, -0.42, 0.06, 0.08, hw - 0.005);
-}
-
-export function garbageTruck(B, pb = 'paint', pc = C('#f07b1d')) {
-  const hw = 0.1;
-  B.box(pb, 0.2, 0.04, -hw, 0.34, 0.23, hw, pc);
-  B.box('glass', 0.335, 0.14, -hw + 0.01, 0.343, 0.21, hw - 0.01, GLASSC);
-  B.box(pb, -0.3, 0.06, -hw, 0.19, 0.27, hw, pc);
-  B.box('solid', -0.34, 0.06, -hw + 0.01, -0.3, 0.25, hw - 0.01, C('#5d5f62'));
-  B.box('solid', -0.3, 0.12, -hw - 0.003, 0.19, 0.14, hw + 0.003, C('#f4f4f4'));
-  B.box('glow', 0.24, 0.23, -0.03, 0.28, 0.25, 0.03, C('#ffb000'), { lit: 0.01 });
-  wheels(B, -0.2, 0.26, hw - 0.012, 0.035);
-  lights(B, 0.34, -0.34, 0.06, 0.08, hw - 0.005);
-}
-
-export function fireTruck(B, pb = 'paint', pc = C('#d42a1f')) {
-  const hw = 0.1;
-  B.box(pb, 0.2, 0.04, -hw, 0.38, 0.25, hw, pc);
-  B.box('glass', 0.375, 0.15, -hw + 0.01, 0.383, 0.23, hw - 0.01, GLASSC);
-  B.box(pb, -0.4, 0.05, -hw, 0.2, 0.24, hw, pc);
-  B.box('solid', -0.4, 0.13, -hw - 0.003, 0.38, 0.15, hw + 0.003, C('#f4f4f4'));
-  B.box('solid', -0.4, 0.24, -0.06, 0.25, 0.25, 0.06, C('#bfc3c7'));
-  for (let x = -0.38; x < 0.24; x += 0.04) B.box('solid', x, 0.25, -0.05, x + 0.01, 0.27, 0.05, C('#d9dcdf'));
-  B.box('solid', -0.4, 0.27, -0.05, 0.25, 0.28, -0.04, C('#d9dcdf'));
-  B.box('solid', -0.4, 0.27, 0.04, 0.25, 0.28, 0.05, C('#d9dcdf'));
-  B.box('glow', 0.26, 0.25, -0.07, 0.32, 0.27, 0.07, C('#2f7bff'), { lit: 0.01 });
-  wheels(B, -0.28, 0.27, hw - 0.012, 0.035);
-  lights(B, 0.38, -0.4, 0.06, 0.08, hw - 0.005);
-}
-
-export function mixer(B, pb = 'paint', pc = C('#f2f2f0')) {
-  const hw = 0.1;
-  B.box(pb, 0.22, 0.04, -hw, 0.36, 0.22, hw, C('#e2a72e'));
-  B.box('glass', 0.355, 0.13, -hw + 0.01, 0.363, 0.2, hw - 0.01, GLASSC);
-  B.box('solid', -0.32, 0.04, -hw + 0.01, 0.22, 0.08, hw - 0.01, DARK);
-  B.push(-0.06, 0, 0, 0.17);
-  for (let i = 0; i < 6; i++) {
-    const x0 = -0.24 + i * 0.075, r = 0.06 + Math.sin((i / 5) * Math.PI) * 0.04;
-    B.box(pb, x0, -r, -r, x0 + 0.075, r, r, i % 2 ? pc : C('#e05a2a'));
-  }
-  B.pop();
-  wheels(B, -0.22, 0.28, hw - 0.012, 0.035);
-}
 
 export function excavatorBase(B) {
   const Y = C('#f2b51c');
@@ -230,4 +117,73 @@ export function dog(B) {
   B.box('paint', 0.025, 0.045, -0.01, 0.05, 0.07, 0.01, [1, 1, 1]);
   for (const x of [-0.024, 0.022]) for (const z of [-0.008, 0.008]) B.box('paint', x - 0.004, 0, z - 0.004, x + 0.004, 0.03, z + 0.004, [1, 1, 1]);
   B.box('paint', -0.045, 0.05, -0.003, -0.03, 0.056, 0.003, [1, 1, 1]);
+}
+
+// ---- small helpers for non axis aligned parts (bikes, tractors)
+// quad whose winding is fixed so that it faces n
+function qn(B, bn, p0, p1, p2, p3, c, n) {
+  const ax = p1[0] - p0[0], ay = p1[1] - p0[1], az = p1[2] - p0[2];
+  const bx = p3[0] - p0[0], by = p3[1] - p0[1], bz = p3[2] - p0[2];
+  const d = (ay * bz - az * by) * n[0] + (az * bx - ax * bz) * n[1] + (ax * by - ay * bx) * n[2];
+  if (d >= 0) B.quad(bn, p0, p1, p2, p3, c); else B.quad(bn, p0, p3, p2, p1, c);
+}
+// square tube between two points in the local x/y plane
+function bar(B, bn, x0, y0, x1, y1, t, c, z = 0) {
+  const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1;
+  const nx = -dy / l * t / 2, ny = dx / l * t / 2, h = t / 2;
+  const a = [x0 + nx, y0 + ny], b = [x1 + nx, y1 + ny], cc = [x1 - nx, y1 - ny], d = [x0 - nx, y0 - ny];
+  qn(B, bn, [a[0], a[1], z + h], [b[0], b[1], z + h], [cc[0], cc[1], z + h], [d[0], d[1], z + h], c, [0, 0, 1]);
+  qn(B, bn, [a[0], a[1], z - h], [b[0], b[1], z - h], [cc[0], cc[1], z - h], [d[0], d[1], z - h], c, [0, 0, -1]);
+  qn(B, bn, [a[0], a[1], z - h], [b[0], b[1], z - h], [b[0], b[1], z + h], [a[0], a[1], z + h], c, [nx, ny, 0]);
+  if (ny < 0 || Math.abs(nx) > Math.abs(ny)) qn(B, bn, [d[0], d[1], z - h], [cc[0], cc[1], z - h], [cc[0], cc[1], z + h], [d[0], d[1], z + h], c, [-nx, -ny, 0]);
+}
+// thin wheel ring in the local x/y plane (flat, seen from both sides)
+function ring(B, bn, cx, cy, r, t, c, z = 0, seg = 9) {
+  const ri = r - t;
+  for (let k = 0; k < seg; k++) {
+    const a0 = k / seg * Math.PI * 2, a1 = (k + 1) / seg * Math.PI * 2;
+    const o0 = [cx + Math.cos(a0) * r, cy + Math.sin(a0) * r], o1 = [cx + Math.cos(a1) * r, cy + Math.sin(a1) * r];
+    const i0 = [cx + Math.cos(a0) * ri, cy + Math.sin(a0) * ri], i1 = [cx + Math.cos(a1) * ri, cy + Math.sin(a1) * ri];
+    for (const s of [1, -1]) qn(B, bn, [i0[0], i0[1], z + s * 0.003], [o0[0], o0[1], z + s * 0.003], [o1[0], o1[1], z + s * 0.003], [i1[0], i1[1], z + s * 0.003], c, [0, 0, s]);
+  }
+}
+// horizontal cylinder along z
+export function cylZ(B, bn, cx, cy, z0, z1, r, seg, c, cap = c) {
+  for (let k = 0; k < seg; k++) {
+    const a0 = k / seg * Math.PI * 2, a1 = (k + 1) / seg * Math.PI * 2;
+    const p = (a, z) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r, z];
+    const am = (a0 + a1) / 2;
+    qn(B, bn, p(a0, z0), p(a1, z0), p(a1, z1), p(a0, z1), c, [Math.cos(am), Math.sin(am), 0]);
+    B.tri(bn, [cx, cy, z1], p(a0, z1), p(a1, z1), cap);
+    B.tri(bn, [cx, cy, z0], p(a1, z0), p(a0, z0), cap);
+  }
+}
+
+export function bicycle(B, x, z, a, c) {
+  B.push(x, z, a);
+  const r = 0.031, wb = 0.108, T = C('#1f2023');
+  ring(B, 'solid', -wb / 2, r, r, 0.007, T);
+  ring(B, 'solid', wb / 2, r, r, 0.007, T);
+  const RH = [-wb / 2, r], FH = [wb / 2, r], BBk = [-0.004, 0.028], ST = [-0.02, 0.074], HT = [0.036, 0.076], HB = [0.04, 0.06];
+  for (const [p, q] of [[RH, BBk], [RH, ST], [BBk, ST], [ST, HT], [BBk, HB], [HB, FH], [HT, HB]]) bar(B, 'solid', p[0], p[1], q[0], q[1], 0.0055, c);
+  bar(B, 'solid', HT[0], HT[1], HT[0] - 0.004, HT[1] + 0.012, 0.005, T);
+  B.box('solid', HT[0] - 0.008, HT[1] + 0.01, -0.022, HT[0] - 0.001, HT[1] + 0.016, 0.022, T);
+  B.box('solid', ST[0] - 0.014, ST[1], -0.007, ST[0] + 0.008, ST[1] + 0.007, 0.007, T);
+  B.pop();
+}
+
+export function tractor(B, x, z, a, body = C('#c8231b')) {
+  B.push(x, z, a);
+  const T = C('#1d1d20'), Y = C('#e8b21e');
+  B.box('shiny', -0.03, 0.045, -0.035, 0.12, 0.1, 0.035, body);
+  B.box('solid', 0.115, 0.05, -0.03, 0.126, 0.092, 0.03, C('#2b2d31'));
+  B.box('shiny', -0.1, 0.045, -0.055, -0.02, 0.1, 0.055, body);
+  B.box('glass', -0.095, 0.1, -0.048, -0.025, 0.178, 0.048, C('#2f4252'));
+  B.box('shiny', -0.102, 0.178, -0.058, -0.018, 0.19, 0.058, body);
+  B.cyl('solid', 0.07, 0.1, 0.0, 0.005, 0.06, 6, C('#3a3a3a'));
+  for (const s of [1, -1]) {
+    cylZ(B, 'solid', -0.06, 0.056, s * 0.058, s * 0.092, 0.056, 12, T, Y);
+    cylZ(B, 'solid', 0.085, 0.033, s * 0.044, s * 0.066, 0.033, 10, T, Y);
+  }
+  B.pop();
 }

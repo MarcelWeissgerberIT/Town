@@ -264,6 +264,20 @@ def oxblood(a):
     return np.clip(a * (1 - m) + red * m, 0, 1)
 
 
+def shutters(a, target):
+    """recolour green shutters (and door paint) to another colour, keeping the shading."""
+    hsv = np.asarray(Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).convert('HSV')).astype(np.float32) / 255
+    h, sat, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    m = ((h > 0.22) & (h < 0.52) & (sat > 0.18) & (v > 0.08)).astype(np.float32)
+    m = ndimage.gaussian_filter(ndimage.binary_opening(m > 0.5, iterations=1).astype(np.float32), 0.8)
+    L = lum(a)
+    ref = max(1e-3, float((L * m).sum() / max(1.0, m.sum())))
+    tgt = np.array(hexrgb(target), np.float32)
+    new = tgt[None, None] * (L / ref)[..., None] * 0.9
+    mm = m[..., None]
+    return np.clip(a * (1 - mm) + new * mm, 0, 1)
+
+
 def desat(a, k=0.75, tint=(1, 1, 1)):
     L = lum(a)[..., None]
     return np.clip((a * (1 - k) + L * k) * np.array(tint, np.float32), 0, 1)
@@ -290,6 +304,32 @@ def build_atlas():
             src = base['win_s_white' if (kind == 'win_s' and k in WHITE_SHUTTERS) else ('win_s_green' if kind == 'win_s' else kind)]
             col = src.color if k == 'white' else recolor(src.color, tgt)
             add(f'{kind}_{k}', Cell(col, src.emis, src.orm))
+    # more window styles, so that every house can carry its own
+    styles = {
+        'win_a': (build_cell('pl_win_arch', 0.8, box=centre_box(load('pl_win_arch'), 0.8, cx=content_cx(load('pl_win_arch')), y0=0.04, y1=0.96), curtain=True),
+                  ['white', 'cream', 'sand', 'yellow', 'pink']),
+        'win_o': (build_cell('pl_win_orn', 0.8, curtain=True), ['white', 'cream', 'blue', 'yellow', 'mint']),
+        'win_b': (build_cell('pl_balc', 0.8, curtain=True), ['white', 'cream', 'salmon', 'pink', 'sand']),
+    }
+    for kind, (c, cols) in styles.items():
+        for k in cols:
+            add(f'{kind}_{k}', Cell(c.color if k == 'white' else recolor(c.color, hexrgb(PLASTER[k])), c.emis, c.orm))
+    green = base['win_s_green']
+    for kind, shut, cols in (('win_r', '#7d3226', ['cream', 'white', 'yellow', 'sand']), ('win_g', '#56718a', ['white', 'cream', 'salmon', 'pink'])):
+        sc = shutters(green.color, shut)
+        for k in cols:
+            add(f'{kind}_{k}', Cell(sc if k == 'white' else recolor(sc, hexrgb(PLASTER[k])), green.emis, green.orm))
+    # timber, slate and quarry stone houses, north German brick timber framing, modern houses
+    add('wood_win', build_cell('wood_win', 0.8, curtain=True, rough=0.9))
+    add('wood_wall', build_cell('wood_wall', 1.0, box=(0, 0, 1, 1), tile_frac=0.08, rough=0.9))
+    add('slate_win', build_cell('slate_win', 0.8, curtain=True, rough=0.7))
+    add('slate_wall', build_cell('slate_wall', 1.0, box=(0, 0, 1, 1), tile_frac=0.08, rough=0.7))
+    add('rubble_win', build_cell('rubble_win', 0.85, rough=0.95))
+    add('rubble_door', build_cell('rubble_door', 0.85, tile=(True, False), rough=0.95))
+    add('bfw_win', build_cell('bfw_win', 1.0, box=(0, 0, 1, 1), curtain=True))
+    add('bfw_wall', build_cell('bfw_wall', 1.0, box=(0, 0, 1, 1)))
+    add('modern_win', build_cell('modern_win', 0.85, glass='dark', glass_rough=0.05, glass_metal=0.55, rough=0.6))
+    add('garage_wood', build_cell('garage_wood', 1.0, box=(0.05, 0.1, 0.95, 1.0), tile=(True, False), rough=0.7))
     # half timbered
     fw = {
         'fw_win': build_cell('fw_win', 1.0, box=(0, 0, 1, 1), curtain=True),
@@ -359,12 +399,12 @@ def build_atlas():
     add('raw_brick_win', build_cell('raw_brick_win', 0.9, rough=0.95))
 
     names = list(cells.keys())
-    assert len(names) <= 8 * COLS, len(names)
+    assert len(names) <= 12 * COLS, len(names)
     size = CELL * COLS
     color = np.zeros((size, size, 3), np.float32)
     emis = np.zeros((size, size, 3), np.float32)
     orm = np.zeros((size, size, 3), np.float32); orm[..., 0] = 1; orm[..., 1] = 0.9
-    manifest = {'cols': COLS, 'cells': {}, 'signStart': 8 * COLS}
+    manifest = {'cols': COLS, 'cells': {}, 'signStart': 12 * COLS}
     for i, n in enumerate(names):
         cx, cy = i % COLS, i // COLS
         c = cells[n]
@@ -427,6 +467,8 @@ def build_textures():
     tex('field', 'field', 512, fn=lambda a: gray_norm(a, 0.8))
     tex('roof_tile', 'roof_tile', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.86))
     tex('roof_metal', 'roof_metal', 512, frac=0.06, fn=lambda a: gray_norm(a, 0.86))
+    tex('roof_slate', 'roof_slate', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.8))
+    tex('roof_pantile', 'roof_pantile', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.86))
     tex('leaves', 'leaves', 512)
     tex('needles', 'needles', 512)
     k = load('keyart')

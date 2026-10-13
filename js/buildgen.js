@@ -2,6 +2,8 @@ import { col, shade, pick, randRange, randInt, mulberry32 } from './util.js';
 import { PLASTER_KEYS, APT, GLASS } from './textures.js';
 import { ROOF_COLS, AWNING_COLS, SHOP_TYPES, CAR_COLS } from './config.js';
 import * as MD from './models.js';
+import { VEH } from './vehicles.js';
+import * as H from './houses.js';
 
 // ---------------------------------------------------------------------------
 // Procedural buildings. Every generator draws into a Builder whose transform
@@ -13,13 +15,13 @@ export function initBuildgen(atlas) { A = atlas; }
 
 const C = col;
 const W1 = [1, 1, 1];
-const STONE = C('#a39d92');
-const WHITE = C('#f3f1ec');
+export const STONE = C('#a39d92');
+export const WHITE = C('#f3f1ec');
 const DARKM = C('#3a3d42');
 
-function uvq(cell) { const u = A.uv(cell); return [u[0], u[1], u[2], u[1], u[2], u[3], u[0], u[3]]; }
+export function uvq(cell) { const u = A.uv(cell); return [u[0], u[1], u[2], u[1], u[2], u[3], u[0], u[3]]; }
 const NOLIT = /^(wall_|fw_wall|br_wall|apt_wall|stone_wall|raw|ch_wall|metal_(grey|blue|white))/;
-function litOf(cell, rng) {
+export function litOf(cell, rng) {
   if (cell.startsWith('sign_') || cell === 'redcross' || cell === 'clock') return 0.01;
   if (cell.startsWith('shop')) return 0.025 + rng() * 0.05;
   if (NOLIT.test(cell)) return 0;
@@ -53,7 +55,7 @@ export function boxWalls(B, rng, x0, z0, x1, z1, y0, fhs, pickSide, bay = 0.2) {
   facade(B, rng, x1, z0, x0, z0, y0, fhs, (f, k, nb) => pickSide(2, f, k, nb), bay);
   facade(B, rng, x0, z0, x0, z1, y0, fhs, (f, k, nb) => pickSide(3, f, k, nb), bay);
 }
-function gableTri(B, rng, ax, az, bx, bz, y0, h, cell) {
+export function gableTri(B, rng, ax, az, bx, bz, y0, h, cell) {
   const u = A.uv(cell);
   B.tri('facade', [ax, y0, az], [bx, y0, bz], [(ax + bx) / 2, y0 + h, (az + bz) / 2], W1, [u[0], u[1], u[2], u[1], (u[0] + u[2]) / 2, u[3]], litOf(cell, rng));
 }
@@ -109,7 +111,7 @@ export function flatRoof(B, x0, z0, x1, z1, y, opts = {}) {
     B.box('solid', x1 - t, y, z0 + t, x1 + 0.004, y + ph, z1 - t, pc);
   }
 }
-function rooftopStuff(B, rng, x0, z0, x1, z1, y, n = 3) {
+export function rooftopStuff(B, rng, x0, z0, x1, z1, y, n = 3) {
   for (let i = 0; i < n; i++) {
     const w = randRange(rng, 0.06, 0.14), d = randRange(rng, 0.06, 0.12), h = randRange(rng, 0.04, 0.09);
     const x = randRange(rng, x0 + 0.05 + w / 2, x1 - 0.05 - w / 2), z = randRange(rng, z0 + 0.05 + d / 2, z1 - 0.05 - d / 2);
@@ -118,40 +120,40 @@ function rooftopStuff(B, rng, x0, z0, x1, z1, y, n = 3) {
     if (rng() < 0.4) B.cyl('solid', x, y + h, z, Math.min(w, d) * 0.3, 0.012, 8, C('#6f7478'));
   }
 }
-function solarPanels(B, x0, z0, x1, z1, y) {
+export function solarPanels(B, x0, z0, x1, z1, y) {
   for (let x = x0; x + 0.09 <= x1; x += 0.11) for (let z = z0; z + 0.07 <= z1; z += 0.1) {
     B.quad('glass', [x, y + 0.01, z + 0.07], [x + 0.09, y + 0.01, z + 0.07], [x + 0.09, y + 0.045, z], [x, y + 0.045, z], C('#1f3554'));
   }
 }
-function dormer(B, rng, x, zf, yb, dw, dh, depth, winCell, sideCell, rc) {
+export function dormer(B, rng, x, zf, yb, dw, dh, depth, winCell, sideCell, rc, bucket = 'roof') {
   fq(B, winCell, [x - dw / 2, yb - 0.04, zf], [x + dw / 2, yb - 0.04, zf], [x + dw / 2, yb + dh, zf], [x - dw / 2, yb + dh, zf], rng);
   fq(B, sideCell, [x + dw / 2, yb - 0.04, zf], [x + dw / 2, yb - 0.04, zf - depth], [x + dw / 2, yb + dh, zf - depth], [x + dw / 2, yb + dh, zf], rng);
   fq(B, sideCell, [x - dw / 2, yb - 0.04, zf - depth], [x - dw / 2, yb - 0.04, zf], [x - dw / 2, yb + dh, zf], [x - dw / 2, yb + dh, zf - depth], rng);
   const rh = dw * 0.42;
   gableTri(B, rng, x - dw / 2, zf, x + dw / 2, zf, yb + dh, rh, sideCell);
   B.push(x, zf - depth / 2, Math.PI / 2);
-  gableRoof(B, depth, dw, yb + dh, rh, rc, { over: 0.018, gover: 0.02, t: 0.012, ridge: false });
+  gableRoof(B, depth, dw, yb + dh, rh, rc, { over: 0.018, gover: 0.02, t: 0.012, ridge: false, bucket });
   B.pop();
 }
-function chimney(B, x, z, y0, y1, c = '#9b4a35') {
+export function chimney(B, x, z, y0, y1, c = '#9b4a35') {
   B.box('solid', x - 0.032, y0, z - 0.032, x + 0.032, y1, z + 0.032, C(c));
   B.box('solid', x - 0.04, y1, z - 0.04, x + 0.04, y1 + 0.018, z + 0.04, C('#5d5a56'));
 }
-function plinth(B, x0, z0, x1, z1, h = 0.045, c = STONE) {
+export function plinth(B, x0, z0, x1, z1, h = 0.045, c = STONE) {
   B.box('solid', x0 - 0.01, 0, z0 - 0.01, x1 + 0.01, h, z1 + 0.01, c);
 }
-function cornice(B, x0, z0, x1, z1, y, h = 0.022, o = 0.014, c = WHITE) {
+export function cornice(B, x0, z0, x1, z1, y, h = 0.022, o = 0.014, c = WHITE) {
   B.box('solid', x0 - o, y, z0 - o, x1 + o, y + h, z1 + o, c);
 }
 export function aoDecal(B, x0, z0, x1, z1, m = 0.09) {
   B.quad('ao', [x0 - m, 0.0085, z1 + m], [x1 + m, 0.0085, z1 + m], [x1 + m, 0.0085, z0 - m], [x0 - m, 0.0085, z0 - m], W1, [0, 0, 1, 0, 1, 1, 0, 1]);
 }
-function sign(B, rng, key, cx, y, z, w) {
+export function sign(B, rng, key, cx, y, z, w) {
   const h = w / 4;
   B.box('solid', cx - w / 2 - 0.006, y - 0.006, z, cx + w / 2 + 0.006, y + h + 0.006, z + 0.01, C('#2b2b2b'));
   fq(B, `sign_${key}`, [cx - w / 2, y, z + 0.0105], [cx + w / 2, y, z + 0.0105], [cx + w / 2, y + h, z + 0.0105], [cx - w / 2, y + h, z + 0.0105], rng);
 }
-function awning(B, x0, x1, yTop, z, depth, drop, cols) {
+export function awning(B, x0, x1, yTop, z, depth, drop, cols) {
   const n = Math.max(2, Math.round((x1 - x0) / 0.032));
   const zo = z + depth, yl = yTop - drop;
   for (let i = 0; i < n; i++) {
@@ -165,11 +167,11 @@ function awning(B, x0, x1, yTop, z, depth, drop, cols) {
 }
 let PHOTO = false;
 export function setPhotoMode(on) { PHOTO = on; }
-function hedge(B, x0, z0, x1, z1, h = 0.07, c = '#4b7a33') {
+export function hedge(B, x0, z0, x1, z1, h = 0.07, c = '#4b7a33') {
   if (PHOTO) B.box('hedge', x0, 0, z0, x1, h, z1, C('#a9c49a'), { s: 0.18 });
   else B.box('grass', x0, 0, z0, x1, h, z1, C(c), { s: 0.5 });
 }
-function picketFence(B, x0, x1, z, gapX = null, h = 0.06, c = WHITE) {
+export function picketFence(B, x0, x1, z, gapX = null, h = 0.06, c = WHITE) {
   for (let x = x0; x <= x1 + 1e-6; x += 0.042) {
     if (gapX !== null && Math.abs(x - gapX) < 0.055) continue;
     B.box('solid', x - 0.005, 0, z - 0.005, x + 0.005, h, z + 0.005, c);
@@ -180,15 +182,12 @@ function picketFence(B, x0, x1, z, gapX = null, h = 0.06, c = WHITE) {
     B.box('solid', a, h * 0.72, z - 0.003, b, h * 0.72 + 0.008, z + 0.003, c);
   }
 }
-function parkedCar(B, x, z, a, rng, kind = 'car') {
+const PARK_PAINT = { fire: '#d42a1f', police: '#f4f5f4', ambulance: '#f6f6f2' };
+export function parkedCar(B, x, z, a, rng, kind = 'car') {
   B.push(x, z, a);
-  const pc = C(pick(rng, CAR_COLS));
-  if (kind === 'car') MD.car(B, 'shiny', pc);
-  else if (kind === 'van') MD.van(B, 'shiny', pc);
-  else if (kind === 'truck') MD.truck(B, 'shiny', C('#e9e9e6'), { cab: pc });
-  else if (kind === 'fire') MD.fireTruck(B, 'shiny');
-  else if (kind === 'police') MD.car(B, 'shiny', C('#f2f2f0'), { police: true });
-  else if (kind === 'ambulance') MD.van(B, 'shiny', C('#f6f6f2'), { ambulance: true });
+  if (kind === 'car') kind = pick(rng, ['car', 'car', 'hatch', 'hatch', 'kombi']);
+  const pc = C(PARK_PAINT[kind] || pick(rng, CAR_COLS));
+  VEH[kind](B, 'veh', pc, { parked: true });
   B.pop();
 }
 function parking(B, rng, x0, z0, x1, z1, along = 'x', cars = 0.6) {
@@ -205,10 +204,10 @@ function parking(B, rng, x0, z0, x1, z1, along = 'x', cars = 0.6) {
     }
   }
 }
-const BIN_COLS = ['#4a4f55', '#2f5fae', '#6b4a2a', '#e6b422', '#3f7a3a'];
+export const BIN_COLS = ['#4a4f55', '#2f5fae', '#6b4a2a', '#e6b422', '#3f7a3a'];
 
 // ---------------------------------------------------------------- gardens
-function garden(B, rng, meta, o) {
+export function garden(B, rng, meta, o) {
   B.rect('grass', -0.5, -0.5, 0.5, 0.5, 0.004, C(pick(rng, ['#f2f6e6', '#e6eed6', '#f6f2dc'])), 3);
   B.rect('cobble', o.doorX - 0.038, o.fz, o.doorX + 0.038, 0.5, 0.007, C('#ece4d6'), 1.1);
   const back = rng();
@@ -381,7 +380,7 @@ function resL2(B, rng, meta) {
 }
 function PK_LIGHT(pk) { return pk === 'white' ? '#e6e2d8' : '#f6f2ea'; }
 
-function balconyRow(B, x0, x1, z, y, depth = 0.07, rail = 'glass') {
+export function balconyRow(B, x0, x1, z, y, depth = 0.07, rail = 'glass') {
   B.box('solid', x0, y - 0.012, z, x1, y, z + depth, C('#e8e6e0'));
   if (rail === 'glass') {
     B.box('glass', x0, y, z + depth - 0.006, x1, y + 0.055, z + depth, C('#9fc1d6'));
@@ -401,6 +400,7 @@ function resL3(B, rng, meta) {
   meta.trees.push([-0.36, -0.38, 'round', 0.9], [0.36, -0.38, pick(rng, ['round', 'tall']), 0.9]);
   if (!modern) {
     const pk = pick(rng, ['cream', 'yellow', 'white', 'sand', 'pink', 'blue']);
+    const ws = pick(rng, ['win_p', 'win_p', 'win_a', 'win_s', 'win_g', 'win_r']);
     const w = 0.9, d = 0.66, fz = 0.42, floors = 5, fh = 0.27;
     B.push(0, fz - d / 2);
     plinth(B, -w / 2, -d / 2, w / 2, d / 2, 0.06, C('#b5aa98'));
@@ -409,16 +409,17 @@ function resL3(B, rng, meta) {
     const nb = 4, doorK = 1 + Math.floor(rng() * 2);
     boxWalls(B, rng, -w / 2, -d / 2, w / 2, d / 2, 0, fhs, (s, f, k) => {
       if (s === 0 && f === 0 && k === doorK) return `door_${pk}`;
-      if (s % 2 === 1 && rng() < 0.35) return `wall_${pk}`;
-      return `win_p_${pk}`;
+      if (s % 2 === 1 && k % 2 === 1) return `wall_${pk}`;
+      return `${ws}_${pk}`;
     }, w / nb);
     for (let f = 1; f < floors; f++) cornice(B, -w / 2, -d / 2, w / 2, d / 2, f * fh - 0.008, 0.014, 0.008, WHITE);
     const yw = floors * fh;
     cornice(B, -w / 2, -d / 2, w / 2, d / 2, yw - 0.025, 0.03, 0.022, WHITE);
     for (let f = 1; f < floors - 1; f++) if (rng() < 0.7) balconyRow(B, -w / 2 + w / nb * doorK + 0.015, -w / 2 + w / nb * (doorK + 1) - 0.015, d / 2, f * fh + 0.012, 0.06, 'iron');
     const h = 0.32;
-    const rc = rng() < 0.5 ? '#585d64' : pick(rng, ROOF_COLS);
-    hipRoof(B, w, d, yw, h, rc);
+    const rs = H.roofStyle(rng);
+    const rc = rs.rc;
+    hipRoof(B, w, d, yw, h, rc, { bucket: rs.bk });
     for (let i = 0; i < 3; i++) dormer(B, rng, -w / 2 + w * (i + 0.5) / 3, d / 2 * 0.55, yw + h * 0.4, 0.12, 0.1, 0.14, `win_p_${pk}`, `wall_${pk}`, rc);
     chimney(B, -w * 0.3, -0.05, yw + h * 0.5, yw + h + 0.05);
     chimney(B, w * 0.3, -0.05, yw + h * 0.5, yw + h + 0.05);
@@ -500,7 +501,7 @@ function resL4(B, rng, meta, LW, LD) {
 }
 
 // --------------------------------------------------------- commercial
-function shopProps(B, rng, out, fz, w) {
+export function shopProps(B, rng, out, fz, w) {
   if (out === 'cafe') {
     const uc = pick(rng, [C('#ffffff'), C('#e74c3c'), C('#2e7d4f'), C('#f2c230')]);
     for (let i = 0; i < 3; i++) MD.umbrellaTable(B, -w / 2 + 0.12 + i * (w - 0.24) / 2, fz + 0.11, uc);
@@ -538,6 +539,7 @@ function comL1(B, rng, meta) {
   plinth(B, -w / 2, -d / 2, w / 2, d / 2, 0.03);
   aoDecal(B, -w / 2, -d / 2, w / 2, d / 2);
   const fh0 = 0.31, fh = 0.25, ups = rng() < 0.35 ? 2 : 1;
+  const upWin = `${pick(rng, ['win_s', 'win_r', 'win_g', 'win_p', 'win_a', 'win_b'])}_${pk}`;
   const nb = Math.max(3, Math.round(w / 0.2));
   const doorK = rng() < 0.5 ? nb - 1 : 0;
   const fhs = [fh0]; for (let i = 0; i < ups; i++) fhs.push(fh);
@@ -546,23 +548,30 @@ function comL1(B, rng, meta) {
       if (s === 0) return k === doorK ? 'shopdoor' : `shop_${shop.k}`;
       return rng() < 0.5 ? `wall_${pk}` : `win_p_${pk}`;
     }
-    return rng() < 0.5 ? `win_s_${pk}` : `win_p_${pk}`;
+    return (s === 0 || k % 2 === 0) ? upWin : `win_p_${pk}`;
   }, w / nb);
   const yw = fhs.reduce((a, b) => a + b, 0);
   const sx0 = doorK === 0 ? -w / 2 + w / nb : -w / 2, sx1 = doorK === 0 ? w / 2 : w / 2 - w / nb;
   sign(B, rng, shop.sign, (sx0 + sx1) / 2, fh0 - 0.04, d / 2, Math.min(0.3, (sx1 - sx0) * 0.8));
   awning(B, sx0 + 0.01, sx1 - 0.01, fh0 - 0.045, d / 2, 0.13, 0.055, pick(rng, AWNING_COLS));
-  const rc = pick(rng, ROOF_COLS);
+  const rs = H.roofStyle(rng);
+  const rc = rs.rc;
   let h;
-  if (rng() < 0.65) {
+  const rr = rng();
+  if (rr < 0.25) {
     h = (d / 2) * Math.tan(0.85);
-    gableRoof(B, w, d, yw, h, rc);
+    const yk = H.halfHipRoof(B, w, d, yw, h, rs, 0.62);
+    gableTri(B, rng, w / 2, d / 2, w / 2, -d / 2, yw, yk - yw, `wall_${pk}`);
+    gableTri(B, rng, -w / 2, -d / 2, -w / 2, d / 2, yw, yk - yw, `wall_${pk}`);
+  } else if (rr < 0.65) {
+    h = (d / 2) * Math.tan(0.85);
+    gableRoof(B, w, d, yw, h, rc, { bucket: rs.bk });
     gableTri(B, rng, w / 2, d / 2, w / 2, -d / 2, yw, h, `gable_${pk}`);
     gableTri(B, rng, -w / 2, -d / 2, -w / 2, d / 2, yw, h, `gable_${pk}`);
-    if (rng() < 0.6) dormer(B, rng, 0, d / 2 * 0.62, yw + h * 0.38, 0.13, 0.1, 0.15, `win_p_${pk}`, `wall_${pk}`, rc);
+    if (rng() < 0.6) dormer(B, rng, 0, d / 2 * 0.62, yw + h * 0.38, 0.13, 0.1, 0.15, `win_p_${pk}`, `wall_${pk}`, rc, rs.bk);
   } else {
     h = (w / 2) * Math.tan(0.9);
-    B.push(0, 0, Math.PI / 2); gableRoof(B, d, w, yw, h, rc); B.pop();
+    B.push(0, 0, Math.PI / 2); gableRoof(B, d, w, yw, h, rc, { bucket: rs.bk }); B.pop();
     gableTri(B, rng, -w / 2, d / 2, w / 2, d / 2, yw, h, `gable_${pk}`);
     gableTri(B, rng, w / 2, -d / 2, -w / 2, -d / 2, yw, h, `gable_${pk}`);
   }
@@ -585,7 +594,7 @@ function comL2(B, rng, meta) {
   aoDecal(B, -w / 2, -d / 2, w / 2, d / 2);
   const fhs = [0.32]; for (let i = 1; i < floors; i++) fhs.push(0.27);
   const nb = 4, doorK = rng() < 0.5 ? 0 : 3;
-  const up = stone ? `stone_win_${sk}` : `win_p_${pk}`;
+  const up = stone ? `stone_win_${sk}` : `${pick(rng, ['win_o', 'win_a', 'win_p', 'win_b', 'win_g'])}_${pk}`;
   const side = stone ? `stone_wall_${sk}` : `wall_${pk}`;
   boxWalls(B, rng, -w / 2, -d / 2, w / 2, d / 2, 0, fhs, (s, f, k) => {
     if (f === 0) {
@@ -608,8 +617,9 @@ function comL2(B, rng, meta) {
     h = 0.06;
   } else {
     h = 0.28;
-    const rc = rng() < 0.5 ? '#585d64' : pick(rng, ROOF_COLS);
-    hipRoof(B, w, d, yw, h, rc);
+    const rs = H.roofStyle(rng);
+    const rc = rs.rc;
+    hipRoof(B, w, d, yw, h, rc, { bucket: rs.bk });
     for (let i = 0; i < 3; i++) dormer(B, rng, -w / 2 + w * (i + 0.5) / 3, d / 2 * 0.55, yw + h * 0.4, 0.11, 0.09, 0.14, up, side, rc);
   }
   B.pop();
@@ -723,7 +733,7 @@ function indL1(B, rng, meta) {
   // yard
   for (let i = 0; i < 3; i++) B.box('solid', -0.42 + i * 0.09, 0, -0.4, -0.35 + i * 0.09, 0.03 + (i % 2) * 0.03, -0.32, C('#b08a5a'));
   for (let i = 0; i < 3; i++) B.cyl('solid', 0.3 + i * 0.05, 0, -0.38, 0.02, 0.055, 8, C(pick(rng, ['#2f6fa8', '#c0392b', '#3c3c3c'])));
-  if (rng() < 0.6) parkedCar(B, -0.25, fz + 0.12, 0, rng, 'van');
+  if (rng() < 0.6) parkedCar(B, -0.19, fz + 0.12, 0, rng, 'van');
   meta.door = [-w / 2 + 0.5 * w / nb, fz + 0.03];
   meta.height = 0.48;
   meta.shell = { x0: -w / 2, z0: fz - d, x1: w / 2, z1: fz, fhs, roofH: h, mat: 'brick' };
@@ -766,7 +776,7 @@ function indL2(B, rng, meta) {
     B.cyl('shiny', -0.36 + i * 0.13, 0, -0.38, 0.055, 0.42, 12, C('#e6e8ea'));
     B.cyl('shiny', -0.36 + i * 0.13, 0.42, -0.38, 0.055, 0.04, 12, C('#d0d3d6'), { r1: 0.01 });
   }
-  parkedCar(B, 0.1, 0.44, 0, rng, 'truck');
+  parkedCar(B, 0.0, 0.42, 0, rng, 'truck');
   meta.door = [-0.04 - w / 2 + 0.11, fz + 0.03];
   meta.height = 0.6;
   meta.shell = { x0: -0.04 - w / 2, z0: fz - d, x1: -0.04 + w / 2, z1: fz, fhs, roofH: 0.1, mat: 'brick' };
@@ -775,7 +785,7 @@ function indL2(B, rng, meta) {
 function indL3(B, rng, meta, LW, LD) {
   const mk = pick(rng, ['grey', 'blue', 'white']);
   B.rect('asphalt', -LW / 2, -LD / 2, LW / 2, LD / 2, 0.005, C('#d0d0d0'), 2);
-  const w = 1.7, d = 1.15, zc = -0.32;
+  const w = 1.7, d = 1.15, zc = -0.4;
   B.push(0, zc);
   aoDecal(B, -w / 2, -d / 2, w / 2, d / 2, 0.12);
   const fhs = [0.3, 0.26];
@@ -791,7 +801,7 @@ function indL3(B, rng, meta, LW, LD) {
   // trucks at docks
   const nDock = Math.round(w / 0.24);
   for (let k = 1; k < nDock; k += 2) {
-    if (rng() < 0.7) parkedCar(B, -w / 2 + (k + 0.5) * w / nDock, zc + d / 2 + 0.43, Math.PI / 2, rng, 'truck');
+    if (rng() < 0.7) parkedCar(B, -w / 2 + (k + 0.5) * w / nDock, zc + d / 2 + 0.375, -Math.PI / 2, rng, 'truck');
   }
   for (let x = -0.9; x <= 0.9; x += 0.3) B.box('solid', x, 0.005, 0.85, x + 0.15, 0.008, 0.87, C('#f2c230'));
   meta.door = [-w / 2 + 0.12, zc + d / 2 + 0.04];
@@ -913,7 +923,12 @@ function firestation(B, rng, meta, LW, LD) {
   boxWalls(B, rng, -tw / 2, -tw / 2, tw / 2, tw / 2, 0, [0.3, 0.3, 0.3, 0.3], (s, f) => (f === 3 ? 'br_win_red' : 'br_wall_red'), 0.15);
   hipRoof(B, tw, tw, 1.2, 0.2, '#4a4f55', { spire: 0.12 });
   B.pop();
-  for (let i = 0; i < 2; i++) parkedCar(B, x0 + 0.17 + i * 0.47, 0.36, -Math.PI / 2, rng, 'fire');
+  // engines stand half way out of the open bays
+  for (let i = 0; i < 2; i++) {
+    const bx = x0 + 0.12 + i * 0.48;
+    B.quad('solid', [bx - 0.115, 0.004, fz + 0.003], [bx + 0.115, 0.004, fz + 0.003], [bx + 0.115, 0.3, fz + 0.003], [bx - 0.115, 0.3, fz + 0.003], C('#17181a'));
+    parkedCar(B, bx, 0.036, -Math.PI / 2, rng, 'fire');
+  }
   for (let i = 0; i < 4; i++) B.cyl('solid', 0.35 + i * 0.07, 0, 0.42, 0.015, 0.045, 6, C('#ff6a1a'), { r1: 0.002 });
   B.cyl('solid', 0.9, 0, 0.4, 0.006, 0.5, 6, C('#d6d6d6'));
   B.box('solid', 0.9, 0.4, 0.4, 0.98, 0.47, 0.402, C('#c0392b'));
@@ -937,8 +952,8 @@ function police(B, rng, meta) {
   B.cyl('solid', 0.25, 0.82, -0.1, 0.006, 0.3, 4, C('#888'));
   sign(B, rng, 'polizei', 0.1, 0.32, d / 2, 0.26);
   B.pop();
-  parkedCar(B, -0.25, 0.4, 0, rng, 'police');
-  parkedCar(B, 0.2, 0.4, 0, rng, 'police');
+  parkedCar(B, -0.255, 0.4, 0, rng, 'police');
+  parkedCar(B, 0.245, 0.4, 0, rng, 'police');
   meta.door = [-w / 2 + 1.5 * 0.205, fz + 0.03];
   meta.height = 0.9;
   meta.station = 'police';
@@ -1153,7 +1168,7 @@ function tvtower(B, rng, meta, LW, LD) {
 }
 
 const GEN = {
-  res1: resL1, res2: resL2, res3: resL3, res4: resL4,
+  res1: H.resL1, res2: H.resL2, res3: (B, rng, meta) => H.resL3(B, rng, meta, resL3), res4: resL4,
   com1: comL1, com2: comL2, com3: comL3, com4: comL4,
   ind1: indL1, ind2: indL2, ind3: indL3,
   park, playground, plaza, firestation, police, school, hospital, townhall, church, stadium, tvtower,
@@ -1170,7 +1185,7 @@ export function genBuilding(B, b) {
   const meta = { door: [0, 0.45], trees: [], lamps: [], smoke: [], fountain: null, height: 0.6, shell: null };
   const [LW, LD] = localSize(b);
   const fn = GEN[b.type];
-  if (fn) fn(B, rng, meta, LW, LD);
+  if (fn) fn(B, rng, meta, LW, LD, b);
   return meta;
 }
 
