@@ -59,6 +59,14 @@ export const SIGNS = {
   stadion: { t: 'Stadion', bg: '#1d3b2a', fg: '#ffffff' },
   wohnen: { t: 'Wohnpark', bg: '#e8e2d4', fg: '#38506b' },
   kirche: { t: '', bg: '#d6c09a', fg: '#3a2a1a' },
+  spielwaren: { t: 'Spielwaren', bg: '#2f6db5', fg: '#ffe066' },
+  schuhe: { t: 'Schuhhaus', bg: '#2a2a2a', fg: '#e9d7b0', serif: true },
+  optiker: { t: 'Optiker', bg: '#f4f4f0', fg: '#1f4f8f' },
+  elektro: { t: 'Elektro', bg: '#1b2a3a', fg: '#7fd3ff' },
+  drogerie: { t: 'Drogerie', bg: '#e8f1f8', fg: '#2a6db0' },
+  arkaden: { t: 'Lindenau Arkaden', bg: '#1f2d3a', fg: '#f3c66b' },
+  konzern: { t: 'Hansa AG', bg: '#0f1b2d', fg: '#e8edf3' },
+  tanke: { t: 'Tankstelle', bg: '#0d5c3a', fg: '#ffd400' },
 };
 
 function tex(canvas, srgb = true, repeat = false) {
@@ -85,6 +93,7 @@ class Painter {
   constructor(cc, ec, oc, cell, ecell) {
     this.cc = cc; this.ec = ec; this.oc = oc; this.cell = cell; this.ecell = ecell;
     this.rng = mulberry32(1234);
+    this.mask = 0;
   }
   begin(idx, wCells = 1, half = -1) {
     const cx = idx % 16, cy = Math.floor(idx / 16);
@@ -99,7 +108,7 @@ class Painter {
     this.w = 100 * wCells;
   }
   end() { this.cc.restore(); this.oc.restore(); this.ec.restore(); }
-  orm(r, m) { return `rgb(255,${Math.round(r * 255)},${Math.round(m * 255)})`; }
+  orm(r, m) { return `rgb(${this.mask * 255},${Math.round(r * 255)},${Math.round(m * 255)})`; }
   // generic shape fill on all layers
   fill(path, c, r = 0.9, m = 0, e = null) {
     this.cc.fillStyle = c; path(this.cc); this.cc.fill();
@@ -132,7 +141,9 @@ class Painter {
 
 // ------------------------------------------------------------- cell helpers
 function plaster(p, c, rough = 0.93) {
+  p.mask = 1;
   p.rect(0, 0, p.w, 100, c, rough, 0);
+  p.mask = 0;
   p.noise(0, 0, p.w, 100, 320, 0.045);
   p.grime(0, 40, p.w, 60, 0.07);
 }
@@ -262,12 +273,27 @@ function stoneBlocks(p, base, rng, rowH = 12.5) {
 function cellAlias(name) {
   const m = /^win_[aorgb]_(\w+)$/.exec(name);
   if (m) return (name[4] === 'r' || name[4] === 'g' || name[4] === 'b' ? 'win_s_' : 'win_p_') + m[1];
+  if (name.startsWith('shop_')) return 'shop_general';
+  if (name.startsWith('sky_') || name.startsWith('glass_')) return 'glass_dark';
   return {
     wood_win: 'fw_win_brown', wood_wall: 'fw_wall_brown', slate_win: 'win_s_white', slate_wall: 'wall_white',
     rubble_win: 'stone_win_beige', rubble_door: 'stone_door', bfw_win: 'fw_win_red', bfw_wall: 'fw_wall_red',
     modern_win: 'apt_win_white', garage_wood: 'garage_grey',
+    fwfr_win: 'fw_win_brown', fwfr_wall: 'fw_wall_brown', fwsw_win: 'fw_win_brown', fwsw_wall: 'fw_wall_brown',
+    hanse_win: 'br_win_dark', hanse_wall: 'br_wall_dark', shingle_win: 'win_s_white', shingle_wall: 'wall_white',
+    alp_win: 'win_s_white', alp_balc: 'fw_win_brown', bh_win: 'apt_win_white', f70_win: 'apt_win_beige',
+    kl90_win: 'br_win_red', kl90_door: 'br_door_red', dk_win: 'apt_win_grey', eco_win: 'apt_win_white',
+    plat_win: 'apt_win_grey', plat_bal: 'apt_bal_grey', hh70_win: 'apt_bal_beige', super_front: 'shop_general',
+    kauf_win: 'stone_win_beige', office_band: 'glass_silver', office_punch: 'stone_win_grey',
   }[name];
 }
+// neutral base cell of each tintable family (procedural atlas: the white variant)
+const TINT_BASES = {
+  win_s: 'win_s_white', win_sw: 'win_s_white', win_p: 'win_p_white', door: 'door_white', wall: 'wall_white', gable: 'gable_white',
+  win_a: 'win_p_white', win_o: 'win_p_white', win_b: 'win_s_white', win_r: 'win_s_white', win_g: 'win_s_white',
+  jug_win: 'win_p_white', jug_wall: 'wall_white', f50_win: 'win_p_white',
+  apt_win: 'apt_win_white', apt_bal: 'apt_bal_white', apt_wall: 'apt_wall_white', apt_door: 'apt_door_white',
+};
 
 export class Atlas {
   constructor(cellPx, ecellPx) {
@@ -276,7 +302,9 @@ export class Atlas {
     this.size = cellPx * 16;
     this.cells = {};
     this.next = 0;
-    this.nextSign = 16 * 12; // signs: two per 4x1 block, stacked in half-height slots
+    this.nextSign = 16 * 11; // signs: two per 4x1 block, stacked in half-height slots
+    this.tint = new Set();    // cells whose plaster can be tinted per house
+    this.neutral = [0.949, 0.937, 0.91];
     this.cColor = canvas(this.size);
     this.cEmis = canvas(this.ecell * 16);
     this.cOrm = canvas(this.ecell * 16);
@@ -284,7 +312,7 @@ export class Atlas {
     const ec = this.cEmis.getContext('2d');
     const oc = this.cOrm.getContext('2d');
     ec.fillStyle = '#000'; ec.fillRect(0, 0, this.cEmis.width, this.cEmis.width);
-    oc.fillStyle = 'rgb(255,230,0)'; oc.fillRect(0, 0, this.cOrm.width, this.cOrm.width);
+    oc.fillStyle = 'rgb(0,230,0)'; oc.fillRect(0, 0, this.cOrm.width, this.cOrm.width);
     this.p = new Painter(cc, ec, oc, this.cell, this.ecell);
   }
   add(name, fn, wCells = 1) {
@@ -671,6 +699,7 @@ function buildAtlas(cellPx) {
   A.add('raw_brick_win', (p, rng) => { poroton(p, rng); p.rect(30, 24, 40, 50, '#2c2622', 0.95); p.rect(28, 20, 44, 5, '#9a9a94', 0.9); });
 
   paintSigns(A);
+  for (const [b, src] of Object.entries(TINT_BASES)) if (A.cells[src]) { A.cells[b] = A.cells[src]; A.tint.add(b); }
   A.build();
   return A;
 }
@@ -884,10 +913,12 @@ async function loadPhotoTextures(quality) {
   for (const [n, idx] of Object.entries(manifest.cells)) { A.cells[n] = { idx, w: 1 }; maxIdx = Math.max(maxIdx, idx); }
   A.next = maxIdx + 1;
   A.nextSign = manifest.signStart;
+  A.tint = new Set(manifest.tint || []);
+  if (manifest.neutral) A.neutral = manifest.neutral;
   paintSigns(A);
   A.build();
   A.photo = true;
-  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'roof_slate', 'roof_pantile', 'leaves', 'needles'];
+  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'roof_slate', 'roof_pantile', 'roof_thatch', 'roof_shingle', 'roof_green', 'leaves', 'needles'];
   const imgs = await Promise.all(names.map((n) => loadImage(`${base}tex/${n}.jpg`)));
   const out = { atlas: A };
   names.forEach((n, i) => {
@@ -900,7 +931,7 @@ async function loadPhotoTextures(quality) {
   });
   return {
     atlas: A, grass: out.grass, cobble: out.cobble, asphalt: out.asphalt, dirt: out.dirt, sand: out.sand,
-    gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal, roofSlate: out.roof_slate, roofPantile: out.roof_pantile,
+    gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal, roofSlate: out.roof_slate, roofPantile: out.roof_pantile, roofThatch: out.roof_thatch, roofShingle: out.roof_shingle, roofGreen: out.roof_green,
     leaves: out.leaves, needles: out.needles, photo: true,
   };
 }

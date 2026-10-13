@@ -54,6 +54,7 @@ export class Game {
     b.flags = { wander: !!meta.wander, kids: !!meta.kids, pigeons: !!meta.pigeons, station: meta.station || null };
     if (meta.shop) b.shop = meta.shop;
     if (meta.signKey) b.signKey = meta.signKey;
+    b.variant = meta.variant || null;
     if (!b.name) b.name = buildingName(b, mulberry32(b.seed + 1));
     this.chunks.setBuildingGeo(b, b.state === 'done' ? B.pack() : null);
     this.treesDirty = true;

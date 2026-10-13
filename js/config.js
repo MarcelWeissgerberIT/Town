@@ -76,4 +76,9 @@ export const SHOP_TYPES = [
   { k: 'general', sign: 'kiosk', name: 'Kiosk', out: null },
   { k: 'general', sign: 'friseur', name: 'Friseur', out: null },
   { k: 'cafe', sign: 'gasthaus', name: 'Gasthaus', out: 'cafe' },
+  { k: 'toys', sign: 'spielwaren', name: 'Spielwaren', out: null },
+  { k: 'shoes', sign: 'schuhe', name: 'Schuhhaus', out: null },
+  { k: 'optic', sign: 'optiker', name: 'Optiker', out: null },
+  { k: 'electro', sign: 'elektro', name: 'Elektrofachmarkt', out: null },
+  { k: 'drug', sign: 'drogerie', name: 'Drogerie', out: null },
 ];

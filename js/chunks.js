@@ -3,7 +3,7 @@ import { Builder, concatPacked, packedToGeometry } from './geom.js';
 import { CHUNK } from './config.js';
 import { genTile } from './ground.js';
 
-const SHADOW_CAST = new Set(['facade', 'roof', 'slate', 'pantile', 'metal', 'flat', 'solid', 'shiny', 'glass', 'glow', 'grass', 'hedge', 'veh', 'beacon']);
+const SHADOW_CAST = new Set(['facade', 'roof', 'slate', 'pantile', 'thatch', 'shingle', 'greenroof', 'metal', 'flat', 'solid', 'shiny', 'glass', 'glow', 'grass', 'hedge', 'veh', 'beacon']);
 
 export class ChunkManager {
   constructor(scene, world, M) {

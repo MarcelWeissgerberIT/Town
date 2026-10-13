@@ -28,24 +28,68 @@ function litInject(mat, mode) {
   mat.customProgramCacheKey = () => 'lit-' + mode;
 }
 
+// dissolve via a per-instance aFade attribute (0 visible .. 1 gone); meshes
+// without the attribute read 0 and stay fully visible
+export function withFade(mat, key) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aFade;\nvarying float vFade;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFade = aFade;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vFade;')
+      .replace('void main() {', 'void main() {\n  if (vFade > 0.0 && vFade >= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;');
+  };
+  const k = mat.customProgramCacheKey ? mat.customProgramCacheKey() : '';
+  mat.customProgramCacheKey = () => `${k}-fade-${key}`;
+  return mat;
+}
+// tints the plaster where the ORM red channel holds the plaster mask (vertex colour = tint)
+function withTint(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `
+#ifdef USE_COLOR
+  float tintMask = texture2D( roughnessMap, vRoughnessMapUv ).r;
+  diffuseColor.rgb *= mix( vec3( 1.0 ), vColor.rgb, tintMask );
+#endif`);
+  };
+  const k = mat.customProgramCacheKey ? mat.customProgramCacheKey() : '';
+  mat.customProgramCacheKey = () => `${k}-tint`;
+  return mat;
+}
+export function fadeDepthMaterial() {
+  return withFade(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), 'depth');
+}
+export function glowMaterial() {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, emissive: 0xffffff });
+  litInject(m, 'glow');
+  return m;
+}
+
 export function makeMaterials(T) {
   const A = T.atlas;
   const M = {};
   M.facade = new THREE.MeshStandardMaterial({
     map: A.map, emissiveMap: A.emissive, emissive: 0xffffff, emissiveIntensity: 1.0,
-    roughnessMap: A.orm, metalnessMap: A.orm, roughness: 1, metalness: 1,
+    roughnessMap: A.orm, metalnessMap: A.orm, roughness: 1, metalness: 1, vertexColors: true,
   });
   litInject(M.facade, 'atlas');
+  withTint(M.facade);
   M.roof = new THREE.MeshStandardMaterial({ map: T.roofTile, vertexColors: true, roughness: 0.82 });
   M.slate = new THREE.MeshStandardMaterial({ map: T.roofSlate || T.roofTile, vertexColors: true, roughness: 0.6, metalness: 0.05 });
   M.pantile = new THREE.MeshStandardMaterial({ map: T.roofPantile || T.roofTile, vertexColors: true, roughness: 0.8 });
+  M.thatch = new THREE.MeshStandardMaterial({ map: T.roofThatch || T.roofTile, vertexColors: true, roughness: 0.95, color: T.roofThatch ? 0xffffff : 0xb39a6a });
+  M.shingle = new THREE.MeshStandardMaterial({ map: T.roofShingle || T.roofTile, vertexColors: true, roughness: 0.85, color: T.roofShingle ? 0xffffff : 0x8f877c });
+  M.greenroof = new THREE.MeshStandardMaterial({ map: T.roofGreen || T.grass, vertexColors: true, roughness: 0.95 });
   M.metal = new THREE.MeshStandardMaterial({ map: T.roofMetal, vertexColors: true, roughness: 0.42, metalness: 0.55 });
   M.flat = new THREE.MeshStandardMaterial({ map: T.gravel, vertexColors: true, roughness: 0.95 });
   M.solid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78 });
   M.shiny = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.45 });
   M.glass = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.7 });
-  M.glow = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, emissive: 0xffffff });
-  litInject(M.glow, 'glow');
+  M.glow = glowMaterial();
   M.grass = new THREE.MeshStandardMaterial({ map: T.grass, vertexColors: true, roughness: 0.96 });
   M.cobble = new THREE.MeshStandardMaterial({ map: T.cobble, vertexColors: true, roughness: 0.9 });
   M.asphalt = new THREE.MeshStandardMaterial({ map: T.asphalt, vertexColors: true, roughness: 0.88 });

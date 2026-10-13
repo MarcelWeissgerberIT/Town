@@ -132,6 +132,9 @@ GLASS_TINTS = {
     'teal': ([0.66, 0.86, 0.84], [0.10, 0.30, 0.31]),
     'dark': ([0.52, 0.60, 0.70], [0.06, 0.09, 0.14]),
     'silver': ([0.88, 0.92, 0.95], [0.40, 0.46, 0.52]),
+    'gold': ([0.95, 0.86, 0.62], [0.42, 0.32, 0.14]),
+    'bronze': ([0.80, 0.70, 0.60], [0.22, 0.16, 0.12]),
+    'green': ([0.72, 0.88, 0.78], [0.12, 0.28, 0.22]),
 }
 
 
@@ -158,6 +161,34 @@ def fill_glass(a, m, tint='warm', curtain=False):
     g = g * (0.8 + 0.2 * shade[..., None])
     mm = m[..., None]
     return a * (1 - mm) + g * mm
+
+
+def plaster_mask(a, tol=0.16, base=None):
+    """soft mask of the wall plaster (colour estimated at the image border)."""
+    if base is None:
+        border = np.concatenate([a[:, :20].reshape(-1, 3), a[:, -20:].reshape(-1, 3), a[:20].reshape(-1, 3)])
+        base = np.median(border, axis=0)
+    L = lum(a)[..., None] + 1e-4
+    chroma = a / L
+    bch = base / (lum(base[None, None])[..., None][0, 0] + 1e-4)
+    d = np.abs(chroma - bch).sum(axis=2)
+    lr = lum(a) / (lum(base[None, None])[0, 0] + 1e-4)
+    m = np.clip(1 - (d - tol) / 0.12, 0, 1) * np.clip((lr - 0.45) / 0.2, 0, 1) * np.clip((1.25 - lr) / 0.15, 0, 1)
+    return ndimage.gaussian_filter(m, 1.2), base
+
+
+NEUTRAL = np.array([0.93, 0.92, 0.9], np.float32)
+
+
+def neutral(c, tol=0.16):
+    """plaster becomes a neutral light tone; its mask goes to the ORM red channel so the
+    game can tint every house individually (diffuse *= mix(1, tint, mask))."""
+    m, base = plaster_mask(c.color, tol)
+    mm = m[..., None]
+    col = np.clip(c.color * (1 - mm) + c.color * (NEUTRAL / np.maximum(base, 1e-3))[None, None] * mm, 0, 1)
+    orm = c.orm.copy()
+    orm[..., 0] = m
+    return Cell(col, c.emis, orm)
 
 
 def recolor(a, target, tol=0.16, base=None):
@@ -208,7 +239,6 @@ def build_cell(name, aspect=0.8, box=None, glass='warm', curtain=False, rough=0.
     if emis_fn:
         e = np.maximum(e, emis_fn(a))
     o = np.zeros_like(a)
-    o[..., 0] = 1.0
     o[..., 1] = rough * (1 - m) + glass_rough * m
     o[..., 2] = glass_metal * m
     if tile[0] or tile[1]:
@@ -289,36 +319,33 @@ def build_atlas():
     def add(n, c):
         cells[n] = c
 
-    # plastered houses: base cells first, then recolour per plaster colour
-    base = {
-        'win_s_green': build_cell('pl_win_green', 0.8, curtain=True),
-        'win_s_white': build_cell('pl_win_white', 0.8, curtain=True),
-        'win_p': build_cell('pl_win_plain', 0.8),
-        'door': build_cell('pl_door', 0.8, box=None, tile=(True, False)),
-        'wall': build_cell('pl_wall', 1.0, tile_frac=0.1),
-        'gable': build_cell('pl_gable', 1.0),
-    }
-    for k, hexc in PLASTER.items():
-        tgt = hexrgb(hexc)
-        for kind in ('win_s', 'win_p', 'door', 'wall', 'gable'):
-            src = base['win_s_white' if (kind == 'win_s' and k in WHITE_SHUTTERS) else ('win_s_green' if kind == 'win_s' else kind)]
-            col = src.color if k == 'white' else recolor(src.color, tgt)
-            add(f'{kind}_{k}', Cell(col, src.emis, src.orm))
-    # more window styles, so that every house can carry its own
-    styles = {
-        'win_a': (build_cell('pl_win_arch', 0.8, box=centre_box(load('pl_win_arch'), 0.8, cx=content_cx(load('pl_win_arch')), y0=0.04, y1=0.96), curtain=True),
-                  ['white', 'cream', 'sand', 'yellow', 'pink']),
-        'win_o': (build_cell('pl_win_orn', 0.8, curtain=True), ['white', 'cream', 'blue', 'yellow', 'mint']),
-        'win_b': (build_cell('pl_balc', 0.8, curtain=True), ['white', 'cream', 'salmon', 'pink', 'sand']),
-    }
-    for kind, (c, cols) in styles.items():
-        for k in cols:
-            add(f'{kind}_{k}', Cell(c.color if k == 'white' else recolor(c.color, hexrgb(PLASTER[k])), c.emis, c.orm))
-    green = base['win_s_green']
-    for kind, shut, cols in (('win_r', '#7d3226', ['cream', 'white', 'yellow', 'sand']), ('win_g', '#56718a', ['white', 'cream', 'salmon', 'pink'])):
-        sc = shutters(green.color, shut)
-        for k in cols:
-            add(f'{kind}_{k}', Cell(sc if k == 'white' else recolor(sc, hexrgb(PLASTER[k])), green.emis, green.orm))
+    tint = []
+
+    def addt(n, c, tol=0.16):
+        add(n, neutral(c, tol))
+        tint.append(n)
+
+    # plastered houses: one neutral cell per kind, the game tints each house
+    green = build_cell('pl_win_green', 0.8, curtain=True)
+    addt('win_s', green)
+    addt('win_sw', build_cell('pl_win_white', 0.8, curtain=True))
+    addt('win_p', build_cell('pl_win_plain', 0.8))
+    addt('door', build_cell('pl_door', 0.8, box=None, tile=(True, False)))
+    addt('wall', build_cell('pl_wall', 1.0, tile_frac=0.1))
+    addt('gable', build_cell('pl_gable', 1.0))
+    addt('win_a', build_cell('pl_win_arch', 0.8, box=centre_box(load('pl_win_arch'), 0.8, cx=content_cx(load('pl_win_arch')), y0=0.04, y1=0.96), curtain=True))
+    addt('win_o', build_cell('pl_win_orn', 0.8, curtain=True))
+    addt('win_b', build_cell('pl_balc', 0.8, curtain=True))
+    addt('win_r', Cell(shutters(green.color, '#7d3226'), green.emis, green.orm))
+    addt('win_g', Cell(shutters(green.color, '#56718a'), green.emis, green.orm))
+    addt('jug_win', build_cell('jug_win', 0.8, curtain=True))
+    addt('jug_wall', build_cell('jug_wall', 0.8, tile=(True, False)))
+    addt('f50_win', build_cell('f50_win', 0.85))
+    for kind in ('apt_win', 'apt_bal', 'apt_wall', 'apt_door'):
+        c = build_cell(kind, 0.82 if kind != 'apt_wall' else 1.0, curtain=kind in ('apt_win', 'apt_bal'),
+                       tile=(True, kind != 'apt_door'), tile_frac=0.1 if kind == 'apt_wall' else 0.05,
+                       emis_color=(1.0, 0.9, 0.7) if kind == 'apt_door' else (1.0, 0.78, 0.45))
+        addt(kind, c)
     # timber, slate and quarry stone houses, north German brick timber framing, modern houses
     add('wood_win', build_cell('wood_win', 0.8, curtain=True, rough=0.9))
     add('wood_wall', build_cell('wood_wall', 1.0, box=(0, 0, 1, 1), tile_frac=0.08, rough=0.9))
@@ -330,6 +357,34 @@ def build_atlas():
     add('bfw_wall', build_cell('bfw_wall', 1.0, box=(0, 0, 1, 1)))
     add('modern_win', build_cell('modern_win', 0.85, glass='dark', glass_rough=0.05, glass_metal=0.55, rough=0.6))
     add('garage_wood', build_cell('garage_wood', 1.0, box=(0.05, 0.1, 0.95, 1.0), tile=(True, False), rough=0.7))
+    # regional timber framing, Black Forest, Alpine, brick gothic
+    for n in ('fwfr_win', 'fwfr_wall', 'fwsw_win', 'fwsw_wall', 'hanse_win', 'hanse_wall'):
+        add(n, build_cell(n, 1.0, box=(0, 0, 1, 1), curtain=n.endswith('win')))
+    add('shingle_win', build_cell('shingle_win', 0.85, curtain=True, rough=0.85))
+    if os.path.exists(os.path.join(RAW, 'shingle_wall.png')):
+        add('shingle_wall', build_cell('shingle_wall', 1.0, box=(0, 0, 1, 1), tile_frac=0.08, rough=0.85))
+    add('alp_win', build_cell('alp_win', 0.8, curtain=True))
+    add('alp_balc', build_cell('alp_balc', 1.0, box=(0, 0, 1, 1), curtain=True))
+    # 1920s to today
+    add('bh_win', build_cell('bh_win', 1.0, box=(0, 0.02, 1, 0.48), glass='dark', rough=0.5))
+    add('f70_win', build_cell('f70_win', 0.95, box=(0.02, 0, 0.98, 1)))
+    add('kl90_win', build_cell('kl90_win', 0.9, rough=0.95))
+    add('kl90_door', build_cell('kl90_door', 0.9, tile=(True, False), rough=0.95, emis_color=(1.0, 0.88, 0.62)))
+    add('dk_win', build_cell('dk_win', 0.85, glass='dark', glass_metal=0.5, rough=0.55))
+    add('eco_win', build_cell('eco_win', 0.9, rough=0.85))
+    add('plat_win', build_cell('plat_win', 1.0, box=(0, 0, 1, 1), rough=0.9))
+    add('plat_bal', build_cell('plat_bal', 1.0, box=(0, 0, 1, 1), rough=0.9))
+    add('hh70_win', build_cell('hh70_win', 1.0, box=(0, 0, 1, 1), rough=0.9))
+    # retail, offices and skyscrapers
+    add('super_front', build_cell('super_front', 1.0, box=(0, 0, 1, 1), tile=(True, False), glass='silver', rough=0.45, emis_color=(1.0, 0.95, 0.85)))
+    add('kauf_win', build_cell('kauf_win', 1.0, box=(0, 0, 1, 1), glass='warm', rough=0.6))
+    add('office_band', build_cell('office_band', 1.0, box=(0, 0, 1, 1), glass='blue', glass_rough=0.05, glass_metal=0.6, rough=0.4, emis_color=(0.85, 0.9, 1.0)))
+    add('office_punch', build_cell('office_punch', 0.85, glass='dark', glass_metal=0.5, rough=0.7, emis_color=(0.95, 0.9, 0.8)))
+    add('sky_deco', build_cell('sky_deco', 1.0, box=(0, 0, 1, 1), glass='warm', rough=0.6, emis_color=(1.0, 0.85, 0.6)))
+    add('sky_fin', build_cell('sky_fin', 1.0, box=(0, 0, 1, 1), glass='dark', glass_rough=0.05, glass_metal=0.6, rough=0.35, emis_color=(0.85, 0.9, 1.0)))
+    add('sky_diag', build_cell('sky_diag', 1.0, box=(0, 0, 1, 1), glass='blue', glass_rough=0.05, glass_metal=0.6, rough=0.35, emis_color=(0.85, 0.9, 1.0)))
+    for g in ('gold', 'bronze', 'green'):
+        add(f'glass_{g}', build_cell('glass_cw', 0.86, box=(0, 0, 1, 1), glass=g, glass_rough=0.05, glass_metal=0.6, rough=0.35, emis_color=(0.95, 0.9, 0.8)))
     # half timbered
     fw = {
         'fw_win': build_cell('fw_win', 1.0, box=(0, 0, 1, 1), curtain=True),
@@ -353,20 +408,9 @@ def build_atlas():
     add('garage_red', build_cell('garage_red', 1.0, box=(0.06, 0.16, 0.94, 1.0), tile=(True, False), rough=0.5))
     add('garage_grey', build_cell('garage_grey', 1.0, box=(0.04, 0.04, 0.96, 1.0), tile=(True, False), rough=0.5))
     # shops: central part of each storefront, glowing interior at night
-    for k in ['bakery', 'grocer', 'cafe', 'flowers', 'butcher', 'pharmacy', 'books', 'fashion', 'icecream', 'general']:
+    for k in ['bakery', 'grocer', 'cafe', 'flowers', 'butcher', 'pharmacy', 'books', 'fashion', 'icecream', 'general', 'toys', 'shoes', 'optic', 'electro', 'drug']:
         add(f'shop_{k}', build_cell(f'shop_{k}', 0.68, box=centre_box(load(f'shop_{k}'), 0.68, y0=0.04, y1=0.97), tile=(True, False), rough=0.4, emis_fn=shop_emis))
     add('shopdoor', build_cell('shopdoor', 0.7, tile=(True, False), emis_color=(1.0, 0.85, 0.6)))
-    # modern apartments
-    ab = {
-        'apt_win': build_cell('apt_win', 0.82, curtain=True),
-        'apt_bal': build_cell('apt_bal', 0.82, curtain=True),
-        'apt_wall': build_cell('apt_wall', 1.0, tile_frac=0.1),
-        'apt_door': build_cell('apt_door', 0.82, tile=(True, False), emis_color=(1.0, 0.9, 0.7)),
-    }
-    for k, hexc in APT.items():
-        for kind, c in ab.items():
-            col = c.color if k == 'white' else recolor(c.color, hexrgb(hexc))
-            add(f'{kind}_{k}', Cell(col, c.emis, c.orm))
     # offices
     for g in ['blue', 'teal', 'dark', 'silver']:
         add(f'glass_{g}', build_cell('glass_cw', 0.86, box=(0, 0, 1, 1), glass=g, glass_rough=0.05, glass_metal=0.6, rough=0.35, emis_color=(0.85, 0.9, 1.0)))
@@ -399,12 +443,12 @@ def build_atlas():
     add('raw_brick_win', build_cell('raw_brick_win', 0.9, rough=0.95))
 
     names = list(cells.keys())
-    assert len(names) <= 12 * COLS, len(names)
+    assert len(names) <= 11 * COLS, len(names)
     size = CELL * COLS
     color = np.zeros((size, size, 3), np.float32)
     emis = np.zeros((size, size, 3), np.float32)
-    orm = np.zeros((size, size, 3), np.float32); orm[..., 0] = 1; orm[..., 1] = 0.9
-    manifest = {'cols': COLS, 'cells': {}, 'signStart': 12 * COLS}
+    orm = np.zeros((size, size, 3), np.float32); orm[..., 1] = 0.9
+    manifest = {'cols': COLS, 'cells': {}, 'signStart': 11 * COLS, 'tint': tint, 'neutral': [float(v) for v in NEUTRAL]}
     for i, n in enumerate(names):
         cx, cy = i % COLS, i // COLS
         c = cells[n]
@@ -469,6 +513,9 @@ def build_textures():
     tex('roof_metal', 'roof_metal', 512, frac=0.06, fn=lambda a: gray_norm(a, 0.86))
     tex('roof_slate', 'roof_slate', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.8))
     tex('roof_pantile', 'roof_pantile', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.86))
+    tex('roof_thatch', 'roof_thatch', 1024, frac=0.06)
+    tex('roof_shingle', 'roof_shingle', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.84))
+    tex('roof_green', 'roof_green', 512, frac=0.08)
     tex('leaves', 'leaves', 512)
     tex('needles', 'needles', 512)
     k = load('keyart')

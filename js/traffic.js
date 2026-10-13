@@ -4,7 +4,8 @@ import { VEH, VEH_LEN } from './vehicles.js';
 import { Nav } from './nav.js';
 import { DIRS, hash2, mulberry32, pick, clamp, col } from './util.js';
 import { CAR_COLS } from './config.js';
-import { U } from './materials.js';
+import { U, withFade, fadeDepthMaterial, glowMaterial } from './materials.js';
+import { vehicleMaterial } from './vehicles.js';
 
 const W1 = [1, 1, 1];
 const vt = (name, kind, speed, cap, color) => ({ name, build: (B) => VEH[kind](B, 'veh', W1), speed, len: VEH_LEN[kind], cap, color });
@@ -78,7 +79,10 @@ export class Traffic {
     this.spawnTimer = 0;
     this.version = -1;
     this.signals = new Map();
-    this.matBeacon = new THREE.MeshBasicMaterial({ vertexColors: true });
+    // own materials for moving vehicles: they dissolve when they appear or leave
+    this.matBeacon = withFade(new THREE.MeshBasicMaterial({ vertexColors: true }), 'beacon');
+    const vmat = { veh: withFade(vehicleMaterial({ map: T.veh, orm: T.vehOrm }), 'veh'), glow: withFade(glowMaterial(), 'glow'), beacon: this.matBeacon };
+    const depth = fadeDepthMaterial();
     this.meshes = {};
     const m4 = new THREE.Matrix4();
     for (const t in TYPES) {
@@ -87,15 +91,20 @@ export class Traffic {
       const pk = B.pack();
       const parts = [];
       for (const k in pk) {
-        const mat = k === 'beacon' ? this.matBeacon : M[k];
+        const mat = vmat[k] || M[k];
         if (!mat) continue;
-        const im = new THREE.InstancedMesh(packedToGeometry(pk[k]), mat, TYPES[t].cap);
+        const geo = packedToGeometry(pk[k]);
+        const fade = new THREE.InstancedBufferAttribute(new Float32Array(TYPES[t].cap), 1);
+        fade.setUsage(THREE.DynamicDrawUsage);
+        geo.setAttribute('aFade', fade);
+        const im = new THREE.InstancedMesh(geo, mat, TYPES[t].cap);
+        im.customDepthMaterial = depth;
         im.count = 0; im.castShadow = true; im.receiveShadow = true;
         im.frustumCulled = false;
         if (k === 'veh' || k === 'beacon') im.setColorAt(0, new THREE.Color(1, 1, 1));
         for (let i = 0; i < TYPES[t].cap; i++) im.setMatrixAt(i, m4);
         scene.add(im);
-        parts.push({ k, im });
+        parts.push({ k, im, fade });
       }
       this.meshes[t] = parts;
     }
@@ -181,6 +190,7 @@ export class Traffic {
       id: this.nextId++, type, path, i: 0, s: 0, seg: makeSeg(path, 0, opts.endOffset || 0), speed: 0.2,
       max: T.speed * (0.9 + this.rng() * 0.2), pos: [0, 0, 1, 0], color: opts.color || T.color || pick(this.rng, CAR_COLS),
       role: opts.role || 'trip', data: opts.data || {}, wait: 0, ghost: 0, dwell: 0, name: opts.name || T.name, dest: opts.dest || null,
+      fade: opts.offmap ? 0 : 1, fadeDir: opts.offmap ? 0 : -1, leaving: false,
     };
     v.c = new THREE.Color(v.color);
     bez(v.seg, 0, v.pos);
@@ -203,7 +213,7 @@ export class Traffic {
     if (endEdge) post = this.outerTiles(endEdge, 14, false);
     const path = [...pre, ...this.pathTiles(kp), ...post];
     if (path.length < 2) return null;
-    return this.addVehicle(type, path, { ...opts, endOffset: opts.endOffset ?? 0, dest: b });
+    return this.addVehicle(type, path, { ...opts, endOffset: opts.endOffset ?? 0, dest: b, offmap: !a });
   }
 
   buildingsBy(filter) { const out = []; for (const b of this.world.buildings.values()) if (b.state === 'done' && filter(b)) out.push(b); return out; }
@@ -285,7 +295,7 @@ export class Traffic {
     const nextIdx = (order.indexOf(start) + 1) % order.length;
     const kp = this.nav.bfs([start], (k) => k === order[nextIdx], 200);
     if (!kp) return;
-    const v = this.addVehicle('bus', this.pathTiles(kp), { role: 'bus', data: { order, at: nextIdx, line: 1 + buses.length }, name: `Linienbus ${1 + buses.length}` });
+    const v = this.addVehicle('bus', this.pathTiles(kp), { offmap: false, role: 'bus', data: { order, at: nextIdx, line: 1 + buses.length }, name: `Linienbus ${1 + buses.length}` });
     if (v) v.dwellAtEnd = 3.5;
   }
 
@@ -366,7 +376,7 @@ export class Traffic {
       this.rebuildSignals();
       // drop vehicles whose path crosses removed roads
       const w = this.world, N = w.N;
-      this.vehicles = this.vehicles.filter((v) => v.path.every(([x, z]) => !w.inb(x, z) || w.road[z * N + x]));
+      for (const v of this.vehicles) if (!v.leaving && !v.path.every(([x, z]) => !w.inb(x, z) || w.road[z * N + x])) this.leave(v);
     }
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) { this.spawnTimer = 0.35; this.spawnTraffic(view, sim); }
@@ -381,8 +391,18 @@ export class Traffic {
     }
     const out = [0, 0, 0, 0];
     for (const v of this.vehicles) {
-      if (v.dwell > 0) { v.dwell -= dt; v.speed = 0; if (v.dwell <= 0 && !this.arrive(v)) v.done = true; continue; }
+      if (v.fadeDir) {
+        v.fade = clamp(v.fade + v.fadeDir * dt / 0.9, 0, 1);
+        if (v.fadeDir < 0 && v.fade <= 0) v.fadeDir = 0;
+        else if (v.fadeDir > 0 && v.fade >= 1) { v.done = true; continue; }
+      }
+      if (v.leaving) { v.speed = 0; continue; }
+      if (v.dwell > 0) { v.dwell -= dt; v.speed = 0; if (v.dwell <= 0 && !this.arrive(v)) this.leave(v); continue; }
       let target = v.max * (v.seg.turn === 'S' ? 1 : v.seg.turn === 'U' ? 0.35 : 0.55);
+      // brake towards the end of the route instead of stopping dead
+      if (v.i === v.path.length - 1) target = Math.min(target, Math.max(0, v.seg.len - v.s) * 2.4 + 0.03);
+      // pulling away from a building: start gently while appearing
+      if (v.fade > 0) target = Math.min(target, 0.15 + (1 - v.fade) * v.max);
       // traffic light ahead
       const nxt = v.path[v.i + 1];
       if (nxt && this.world.inb(nxt[0], nxt[1]) && v.seg.dOut) {
@@ -432,12 +452,13 @@ export class Traffic {
         if (v.i >= v.path.length) {
           v.i = v.path.length - 1; v.s = v.seg.len;
           if (v.dwellAtEnd) { v.dwell = v.dwellAtEnd; v.dwellAtEnd = 0; }
-          else if (!this.arrive(v)) v.done = true;
+          else if (!this.arrive(v)) this.leave(v);
           break;
         }
         v.seg = makeSeg(v.path, v.i, v.i === v.path.length - 1 ? 0 : 0);
       }
-      if (!v.done) bez(v.seg, clamp(v.s / v.seg.len, 0, 1), out);
+      if (v.leaving) continue;
+      bez(v.seg, clamp(v.s / v.seg.len, 0, 1), out);
       v.pos[0] = out[0]; v.pos[1] = out[1];
       if (Math.hypot(out[2], out[3]) > 1e-4) { v.pos[2] = out[2]; v.pos[3] = out[3]; }
     }
@@ -459,8 +480,10 @@ export class Traffic {
       p.set(v.pos[0], 0.003, v.pos[1]); s.set(1, 1, 1);
       m.compose(p, q, s);
       const bi = this.beaconLevel(v);
+      const fd = v.fade * v.fade * (3 - 2 * v.fade);
       for (const part of parts) {
         part.im.setMatrixAt(n, m);
+        part.fade.array[n] = fd;
         if (part.k === 'veh') part.im.setColorAt(n, v.c);
         else if (part.k === 'beacon') { c.setScalar(bi); part.im.setColorAt(n, c); }
       }
@@ -476,6 +499,7 @@ export class Traffic {
     for (const t in TYPES) for (const part of this.meshes[t]) {
       part.im.count = counts[t];
       part.im.instanceMatrix.needsUpdate = true;
+      part.fade.needsUpdate = true;
       if (part.im.instanceColor) part.im.instanceColor.needsUpdate = true;
     }
     this.pools.count = pools;
@@ -488,6 +512,13 @@ export class Traffic {
       this.lightMesh.setColorAt(i, cols[this.signal(h.k, h.axis)]);
     }
     if (this.lightMesh.instanceColor) this.lightMesh.instanceColor.needsUpdate = true;
+  }
+
+  // parks where it is and dissolves (never pops away)
+  leave(v) {
+    if (v.leaving) return;
+    v.leaving = true; v.speed = 0; v.fadeDir = 1;
+    if (v.data) v.data.siren = false;
   }
 
   // blue lights flash on emergency runs, amber lights turn while collecting

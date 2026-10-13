@@ -439,6 +439,7 @@ export class UI {
       }
       const k = w.idx(b.x, b.z);
       html += '<dl class="kv">';
+      if (b.variant) html += `<dt>Bauweise</dt><dd>${esc(b.variant)}</dd>`;
       if (b.kind === 'res') html += `<dt>Bewohner</dt><dd>${b.state === 'done' ? fmtNum(b.pop) : '–'}</dd>`;
       else html += `<dt>Arbeitsplätze</dt><dd>${b.state === 'done' ? fmtNum(b.jobs) : '–'}</dd>`;
       if (b.kind !== 'svc') html += `<dt>Bodenwert</dt><dd>${Math.round(this.sim.lv[k])} / 100</dd>`;

@@ -4,6 +4,7 @@ import { ROOF_COLS, AWNING_COLS, SHOP_TYPES, CAR_COLS } from './config.js';
 import * as MD from './models.js';
 import { VEH } from './vehicles.js';
 import * as H from './houses.js';
+import * as CM from './commerce.js';
 
 // ---------------------------------------------------------------------------
 // Procedural buildings. Every generator draws into a Builder whose transform
@@ -19,7 +20,45 @@ export const STONE = C('#a39d92');
 export const WHITE = C('#f3f1ec');
 const DARKM = C('#3a3d42');
 
-export function uvq(cell) { const u = A.uv(cell); return [u[0], u[1], u[2], u[1], u[2], u[3], u[0], u[3]]; }
+// ---- facade tints: plaster cells are stored once (neutral) and tinted per house.
+// `wall_cream` resolves to the base `wall` with the cream tint; an unsuffixed
+// tintable cell takes the tint set for the house currently being generated.
+export const PALETTE = {
+  cream: '#efe2c3', yellow: '#f0c862', pink: '#e9a39b', salmon: '#e58f6c', mint: '#a7cf9f', blue: '#9db8d6', white: '#f2efe8', sand: '#dbbf96',
+  grey: '#c6c9c6', beige: '#e2d1b4', terracotta: '#cf8e6a',
+};
+const SUFFIX = /^(.+)_(cream|yellow|pink|salmon|mint|blue|white|sand|grey|beige|terracotta)$/;
+const RES = new Map();
+let TINT = null;
+const tmpC = { r: 0, g: 0, b: 0 };
+function lin(v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+export function tintColor(hex) {
+  const c = col(hex);
+  const n = A.neutral;
+  return [c[0] / lin(n[0]), c[1] / lin(n[1]), c[2] / lin(n[2])];
+}
+const TC = new Map();
+function tintOfHex(hex) { let t = TC.get(hex); if (!t) { t = tintColor(hex); TC.set(hex, t); } return t; }
+// sets the plaster colour for the following tintable cells (hex or null)
+export function setTint(hex) { TINT = hex ? tintOfHex(hex) : null; }
+function resolve(cell) {
+  let r = RES.get(cell);
+  if (r) return r;
+  r = { cell, tint: null };
+  if (A.tint.has(cell)) r.tint = 'cur';
+  else if (!A.cells[cell] || A.photo) {
+    const m = SUFFIX.exec(cell);
+    if (m) {
+      let base = m[1];
+      if (base === 'win_s' && (m[2] === 'mint' || m[2] === 'blue' || m[2] === 'pink')) base = 'win_sw';
+      if (A.tint.has(base)) r = { cell: base, tint: tintOfHex(PALETTE[m[2]]) };
+    }
+  }
+  RES.set(cell, r);
+  return r;
+}
+export function tintOf(cell) { const r = resolve(cell); return r.tint === 'cur' ? (TINT || W1) : (r.tint || W1); }
+export function uvq(cell) { const u = A.uv(resolve(cell).cell); return [u[0], u[1], u[2], u[1], u[2], u[3], u[0], u[3]]; }
 const NOLIT = /^(wall_|fw_wall|br_wall|apt_wall|stone_wall|raw|ch_wall|metal_(grey|blue|white))/;
 export function litOf(cell, rng) {
   if (cell.startsWith('sign_') || cell === 'redcross' || cell === 'clock') return 0.01;
@@ -28,7 +67,7 @@ export function litOf(cell, rng) {
   if (cell.includes('door') || cell.startsWith('ch_') || cell === 'metal_dock') return 0.02 + rng() * 0.08;
   return 0.06 + rng() * 0.94;
 }
-export function fq(B, cell, p0, p1, p2, p3, rng) { B.quad('facade', p0, p1, p2, p3, W1, uvq(cell), litOf(cell, rng)); }
+export function fq(B, cell, p0, p1, p2, p3, rng) { B.quad('facade', p0, p1, p2, p3, tintOf(cell), uvq(cell), litOf(cell, rng)); }
 
 // wall from a to b (outside is to the right when walking a->b seen from above)
 export function facade(B, rng, ax, az, bx, bz, y0, fhs, pickCell, bay = 0.2) {
@@ -56,8 +95,8 @@ export function boxWalls(B, rng, x0, z0, x1, z1, y0, fhs, pickSide, bay = 0.2) {
   facade(B, rng, x0, z0, x0, z1, y0, fhs, (f, k, nb) => pickSide(3, f, k, nb), bay);
 }
 export function gableTri(B, rng, ax, az, bx, bz, y0, h, cell) {
-  const u = A.uv(cell);
-  B.tri('facade', [ax, y0, az], [bx, y0, bz], [(ax + bx) / 2, y0 + h, (az + bz) / 2], W1, [u[0], u[1], u[2], u[1], (u[0] + u[2]) / 2, u[3]], litOf(cell, rng));
+  const u = uvq(cell);
+  B.tri('facade', [ax, y0, az], [bx, y0, bz], [(ax + bx) / 2, y0 + h, (az + bz) / 2], tintOf(cell), [u[0], u[1], u[2], u[1], (u[0] + u[2]) / 2, u[5]], litOf(cell, rng));
 }
 
 // ---- roofs
@@ -190,7 +229,7 @@ export function parkedCar(B, x, z, a, rng, kind = 'car') {
   VEH[kind](B, 'veh', pc, { parked: true });
   B.pop();
 }
-function parking(B, rng, x0, z0, x1, z1, along = 'x', cars = 0.6) {
+export function parking(B, rng, x0, z0, x1, z1, along = 'x', cars = 0.6) {
   B.rect('asphalt', x0, z0, x1, z1, 0.005, C('#d0d0d0'), 2);
   if (along === 'x') {
     for (let x = x0 + 0.02; x + 0.2 <= x1; x += 0.22) {
@@ -206,180 +245,6 @@ function parking(B, rng, x0, z0, x1, z1, along = 'x', cars = 0.6) {
 }
 export const BIN_COLS = ['#4a4f55', '#2f5fae', '#6b4a2a', '#e6b422', '#3f7a3a'];
 
-// ---------------------------------------------------------------- gardens
-export function garden(B, rng, meta, o) {
-  B.rect('grass', -0.5, -0.5, 0.5, 0.5, 0.004, C(pick(rng, ['#f2f6e6', '#e6eed6', '#f6f2dc'])), 3);
-  B.rect('cobble', o.doorX - 0.038, o.fz, o.doorX + 0.038, 0.5, 0.007, C('#ece4d6'), 1.1);
-  const back = rng();
-  if (back < 0.6) {
-    hedge(B, -0.48, -0.48, 0.48, -0.43);
-    hedge(B, -0.48, -0.43, -0.43, o.fz - 0.05, 0.065);
-    hedge(B, 0.43, -0.43, 0.48, o.fz - 0.05, 0.065);
-  } else {
-    const wc = C('#9a6a42');
-    for (let x = -0.47; x <= 0.47; x += 0.06) B.box('solid', x - 0.006, 0, -0.475, x + 0.006, 0.07, -0.465, wc);
-    B.box('solid', -0.47, 0.03, -0.473, 0.47, 0.06, -0.467, wc);
-  }
-  const ft = rng();
-  if (ft < 0.45) picketFence(B, -0.46, 0.46, 0.465, o.doorX);
-  else if (ft < 0.75) {
-    hedge(B, -0.48, 0.44, o.doorX - 0.06, 0.48, 0.05, '#55853a');
-    hedge(B, o.doorX + 0.06, 0.44, 0.48, 0.48, 0.05, '#55853a');
-  } else {
-    B.box('solid', -0.48, 0, 0.45, o.doorX - 0.055, 0.04, 0.48, C('#bdb3a2'));
-    B.box('solid', o.doorX + 0.055, 0, 0.45, 0.48, 0.04, 0.48, C('#bdb3a2'));
-  }
-  const bx = o.doorX > 0 ? -0.36 : 0.36;
-  const nb = randInt(rng, 2, 3);
-  for (let i = 0; i < nb; i++) MD.bin(B, bx + (i - 1) * 0.046, 0.4, C(BIN_COLS[(i + Math.floor(rng() * 5)) % 5]));
-  // trees and bushes
-  meta.trees.push([pick(rng, [-0.3, 0.3]), -0.32, pick(rng, ['round', 'round', 'fruit', 'conifer', 'tall']), randRange(rng, 0.75, 1.05)]);
-  if (rng() < 0.6) meta.trees.push([o.hx - o.w / 2 - 0.02, o.fz + 0.05, 'bush', randRange(rng, 0.7, 1)]);
-  if (rng() < 0.6) meta.trees.push([o.hx + o.w / 2 + 0.02, o.fz + 0.05, 'bush', randRange(rng, 0.7, 1)]);
-  const extra = rng();
-  if (extra < 0.3) {
-    // laundry line
-    const pc = C('#8d8d8d');
-    B.cyl('solid', -0.2, 0, -0.38, 0.005, 0.11, 4, pc); B.cyl('solid', 0.2, 0, -0.38, 0.005, 0.11, 4, pc);
-    B.box('solid', -0.2, 0.105, -0.382, 0.2, 0.108, -0.378, C('#dddddd'));
-    const cc = ['#ffffff', '#e74c3c', '#3498db', '#f1c40f', '#ff9ec7', '#2ecc71'];
-    for (let x = -0.17; x < 0.17; x += 0.055) B.box('solid', x, 0.06, -0.381, x + 0.04, 0.105, -0.379, C(pick(rng, cc)));
-  } else if (extra < 0.45) {
-    // swing
-    const wc = C('#8a5a35');
-    B.box('solid', -0.12, 0, -0.33, -0.11, 0.13, -0.32, wc); B.box('solid', 0.11, 0, -0.33, 0.12, 0.13, -0.32, wc);
-    B.box('solid', -0.12, 0.13, -0.332, 0.12, 0.14, -0.318, wc);
-    B.box('solid', -0.002, 0.04, -0.326, 0.002, 0.13, -0.324, C('#999'));
-    B.box('solid', -0.025, 0.035, -0.335, 0.025, 0.042, -0.315, C('#d33'));
-  } else if (extra < 0.65) {
-    MD.umbrellaTable(B, pick(rng, [-0.22, 0.22]), -0.3, C(pick(rng, ['#e74c3c', '#f1c40f', '#ffffff', '#2e86de'])));
-  } else if (extra < 0.8) {
-    // vegetable patch
-    B.rect('dirt', -0.3, -0.42, -0.05, -0.28, 0.008, C('#9a7a5a'), 1);
-    for (let x = -0.28; x < -0.06; x += 0.04) for (let z = -0.4; z < -0.29; z += 0.035) B.sphere('solid', x, 0.016, z, 0.014, 0.012, 0.014, C(rng() < 0.3 ? '#d9442b' : '#5f9a3c'), 5, 3);
-  }
-  // flowers along the front wall
-  for (let i = 0; i < 6; i++) {
-    const x = o.hx - o.w / 2 + 0.04 + rng() * (o.w - 0.08);
-    if (Math.abs(x - o.doorX) < 0.06) continue;
-    B.sphere('solid', x, 0.018, o.fz + 0.03, 0.022, 0.02, 0.018, C(pick(rng, ['#e23b4b', '#ff6f91', '#ffcf3f', '#b54ad8', '#ffffff', '#4f8f3a'])), 6, 3);
-  }
-}
-
-// ------------------------------------------------------- residential
-function resL1(B, rng, meta) {
-  const fach = rng() < 0.42;
-  const pk = fach ? pick(rng, ['cream', 'white', 'sand', 'yellow', 'pink']) : pick(rng, PLASTER_KEYS);
-  const fwk = rng() < 0.7 ? 'brown' : 'red';
-  const w = randRange(rng, 0.54, 0.64), d = randRange(rng, 0.46, 0.54);
-  const fz = 0.31, hx = randRange(rng, -0.06, 0.06);
-  const fh = 0.25, j = fach ? 0.018 : 0;
-  const ridgeZ = fach ? rng() < 0.7 : rng() < 0.25;
-  const rc = pick(rng, ROOF_COLS);
-  const nbF = Math.max(2, Math.round(w / 0.2));
-  const doorK = Math.floor(nbF / 2);
-  const doorX = hx - w / 2 + (doorK + 0.5) * w / nbF;
-  garden(B, rng, meta, { doorX, fz, hx, w });
-  B.push(hx, fz - d / 2);
-  plinth(B, -w / 2, -d / 2, w / 2, d / 2);
-  aoDecal(B, -w / 2, -d / 2, w / 2, d / 2);
-  boxWalls(B, rng, -w / 2, -d / 2, w / 2, d / 2, 0, [fh], (s, f, k, nb) => {
-    if (s === 0 && k === doorK) return `door_${pk}`;
-    if (s % 2 === 1 && k === 0 && nb > 1 && rng() < 0.5) return `wall_${pk}`;
-    return rng() < 0.5 ? `win_s_${pk}` : `win_p_${pk}`;
-  }, w / nbF);
-  const W = w + 2 * j, D = d + 2 * j;
-  if (fach) B.box('solid', -W / 2 - 0.004, fh - 0.016, -D / 2 - 0.004, W / 2 + 0.004, fh + 0.005, D / 2 + 0.004, C(fwk === 'brown' ? '#4b2f20' : '#6e2a22'));
-  boxWalls(B, rng, -W / 2, -D / 2, W / 2, D / 2, fh, [fh], (s, f, k) => {
-    if (fach) return (s % 2 === 1 && k % 2 === 1) ? `fw_wall_${fwk}` : `fw_win_${fwk}`;
-    return rng() < 0.5 ? `win_s_${pk}` : `win_p_${pk}`;
-  }, W / nbF);
-  const yw = 2 * fh;
-  let h;
-  if (ridgeZ) {
-    h = (W / 2) * Math.tan(fach ? 0.95 : 0.85);
-    B.push(0, 0, Math.PI / 2); gableRoof(B, D, W, yw, h, rc); B.pop();
-    const gc = fach ? `fw_gable_${fwk}` : `gable_${pk}`;
-    gableTri(B, rng, -W / 2, D / 2, W / 2, D / 2, yw, h, gc);
-    gableTri(B, rng, W / 2, -D / 2, -W / 2, -D / 2, yw, h, gc);
-  } else {
-    h = (D / 2) * Math.tan(0.9);
-    gableRoof(B, W, D, yw, h, rc);
-    const gc = fach ? `fw_gable_${fwk}` : `gable_${pk}`;
-    gableTri(B, rng, W / 2, D / 2, W / 2, -D / 2, yw, h, gc);
-    gableTri(B, rng, -W / 2, -D / 2, -W / 2, D / 2, yw, h, gc);
-    if (rng() < 0.65) {
-      const n = W > 0.58 && rng() < 0.5 ? 2 : 1;
-      const xs = n === 1 ? [0] : [-W / 4, W / 4];
-      for (const x of xs) dormer(B, rng, x, D / 2 * 0.62, yw + h * 0.38, 0.13, 0.1, 0.16, fach ? `win_p_${pk}` : `win_p_${pk}`, `wall_${pk}`, rc);
-    }
-  }
-  if (rng() < 0.75) chimney(B, (rng() < 0.5 ? -1 : 1) * W * 0.22, ridgeZ ? -D * 0.22 : -D * 0.14, yw + h * 0.35, yw + h + 0.07);
-  B.pop();
-  meta.door = [doorX, fz + 0.03];
-  meta.height = yw + h;
-  meta.shell = { x0: hx - w / 2, z0: fz - d, x1: hx + w / 2, z1: fz, fhs: [fh, fh], roofH: h, mat: 'brick' };
-}
-
-function resL2(B, rng, meta) {
-  const pk = pick(rng, PLASTER_KEYS);
-  const w = randRange(rng, 0.82, 0.9), d = randRange(rng, 0.52, 0.6);
-  const fz = 0.42, floors = randInt(rng, 3, 4), fh = 0.25;
-  const rc = pick(rng, ROOF_COLS);
-  const mixed = rng() < 0.22;
-  const shop = mixed ? pick(rng, SHOP_TYPES) : null;
-  // yard
-  B.rect('grass', -0.5, -0.5, 0.5, fz - d, 0.004, C('#eef2e0'), 3);
-  B.rect('cobble', -0.5, fz - 0.01, 0.5, 0.5, 0.006, C('#e8e1d4'), 1.1);
-  hedge(B, -0.48, -0.48, 0.48, -0.44);
-  meta.trees.push([randRange(rng, -0.3, 0.3), -0.36, pick(rng, ['round', 'tall', 'fruit']), randRange(rng, 0.8, 1.1)]);
-  for (let i = 0; i < 3; i++) MD.bin(B, 0.38 - i * 0.045, fz - d - 0.05, C(BIN_COLS[i]));
-  B.push(0, fz - d / 2);
-  plinth(B, -w / 2, -d / 2, w / 2, d / 2, 0.05);
-  aoDecal(B, -w / 2, -d / 2, w / 2, d / 2);
-  const nb = Math.round(w / 0.21);
-  const doorK = mixed ? nb - 1 : Math.floor(nb / 2);
-  const fhs = [];
-  for (let i = 0; i < floors; i++) fhs.push(i === 0 && mixed ? 0.3 : fh);
-  const winA = rng() < 0.5 ? `win_p_${pk}` : `win_s_${pk}`;
-  boxWalls(B, rng, -w / 2, -d / 2, w / 2, d / 2, 0, fhs, (s, f, k) => {
-    if (s === 0 && f === 0) {
-      if (k === doorK) return mixed ? 'shopdoor' : `door_${pk}`;
-      return mixed ? `shop_${shop.k}` : winA;
-    }
-    if (s % 2 === 1 && rng() < 0.4) return `wall_${pk}`;
-    return rng() < 0.75 ? winA : `win_s_${pk}`;
-  }, w / nb);
-  cornice(B, -w / 2, -d / 2, w / 2, d / 2, fhs[0] - 0.01, 0.018, 0.01, shade(C(PK_LIGHT(pk)), 1));
-  const yw = fhs.reduce((a, b) => a + b, 0);
-  cornice(B, -w / 2, -d / 2, w / 2, d / 2, yw - 0.02, 0.022, 0.016, WHITE);
-  if (mixed) {
-    sign(B, rng, shop.sign, -w / 2 + (w / nb) * (nb - 1) / 2, fhs[0] - 0.062, d / 2, Math.min(0.26, w * 0.5));
-    awning(B, -w / 2 + 0.02, -w / 2 + (w / nb) * (nb - 1) - 0.01, fhs[0] - 0.068, d / 2, 0.12, 0.05, pick(rng, AWNING_COLS));
-    meta.shop = shop;
-  }
-  let h;
-  if (rng() < 0.7) {
-    h = (d / 2) * Math.tan(0.85);
-    gableRoof(B, w, d, yw, h, rc, { gover: 0.0 });
-    gableTri(B, rng, w / 2, d / 2, w / 2, -d / 2, yw, h, `wall_${pk}`);
-    gableTri(B, rng, -w / 2, -d / 2, -w / 2, d / 2, yw, h, `wall_${pk}`);
-    const n = randInt(rng, 2, 3);
-    for (let i = 0; i < n; i++) dormer(B, rng, -w / 2 + w * (i + 0.5) / n, d / 2 * 0.62, yw + h * 0.38, 0.13, 0.1, 0.15, winA, `wall_${pk}`, rc);
-  } else {
-    h = (w / 2) * Math.tan(0.95);
-    B.push(0, 0, Math.PI / 2); gableRoof(B, d, w, yw, h, rc, { gover: 0.02 }); B.pop();
-    gableTri(B, rng, -w / 2, d / 2, w / 2, d / 2, yw, h, `gable_${pk}`);
-    gableTri(B, rng, w / 2, -d / 2, -w / 2, -d / 2, yw, h, `wall_${pk}`);
-  }
-  if (rng() < 0.8) chimney(B, w * 0.3, -d * 0.18, yw + h * 0.3, yw + h + 0.06);
-  B.pop();
-  meta.door = [-w / 2 + (doorK + 0.5) * w / nb, fz + 0.03];
-  meta.height = yw + h;
-  meta.shell = { x0: -w / 2, z0: fz - d, x1: w / 2, z1: fz, fhs, roofH: h, mat: 'brick' };
-}
-function PK_LIGHT(pk) { return pk === 'white' ? '#e6e2d8' : '#f6f2ea'; }
-
 export function balconyRow(B, x0, x1, z, y, depth = 0.07, rail = 'glass') {
   B.box('solid', x0, y - 0.012, z, x1, y, z + depth, C('#e8e6e0'));
   if (rail === 'glass') {
@@ -393,8 +258,8 @@ export function balconyRow(B, x0, x1, z, y, depth = 0.07, rail = 'glass') {
   B.box('solid', x1 - 0.006, y, z, x1, y + 0.055, z + depth, C('#e8e6e0'));
 }
 
-function resL3(B, rng, meta) {
-  const modern = rng() < 0.5;
+export function resL3(B, rng, meta, force) {
+  const modern = force ? force === 'modern' : rng() < 0.5;
   B.rect('grass', -0.5, -0.5, 0.5, 0.5, 0.004, C('#eef2e0'), 3);
   B.rect('cobble', -0.5, 0.36, 0.5, 0.5, 0.006, C('#e8e1d4'), 1.1);
   meta.trees.push([-0.36, -0.38, 'round', 0.9], [0.36, -0.38, pick(rng, ['round', 'tall']), 0.9]);
@@ -460,7 +325,7 @@ function resL3(B, rng, meta) {
   }
 }
 
-function plazaGround(B, rng, LW, LD, meta) {
+export function plazaGround(B, rng, LW, LD, meta) {
   B.rect('cobble', -LW / 2, -LD / 2, LW / 2, LD / 2, 0.005, C('#ebe4d8'), 1.1);
   for (const [x, z] of [[-LW / 2 + 0.22, LD / 2 - 0.2], [LW / 2 - 0.22, LD / 2 - 0.2], [-LW / 2 + 0.2, -LD / 2 + 0.2], [LW / 2 - 0.2, -LD / 2 + 0.2]]) {
     B.cyl('solid', x, 0, z, 0.1, 0.035, 10, C('#bdb6aa'), { top: C('#5f8f3a') });
@@ -468,7 +333,7 @@ function plazaGround(B, rng, LW, LD, meta) {
   }
 }
 
-function resL4(B, rng, meta, LW, LD) {
+export function resL4(B, rng, meta, LW, LD) {
   plazaGround(B, rng, LW, LD, meta);
   const ak = pick(rng, Object.keys(APT));
   const w = randRange(rng, 1.05, 1.2), d = randRange(rng, 0.9, 1.05);
@@ -524,7 +389,7 @@ export function shopProps(B, rng, out, fz, w) {
   }
 }
 
-function comL1(B, rng, meta) {
+export function comL1(B, rng, meta) {
   const shop = pick(rng, SHOP_TYPES);
   meta.shop = shop;
   const pk = pick(rng, PLASTER_KEYS);
@@ -583,7 +448,7 @@ function comL1(B, rng, meta) {
   meta.shell = { x0: -w / 2, z0: fz - d, x1: w / 2, z1: fz, fhs, roofH: h, mat: 'brick' };
 }
 
-function comL2(B, rng, meta) {
+export function comL2(B, rng, meta) {
   const shop = pick(rng, SHOP_TYPES);
   meta.shop = shop;
   const stone = rng() < 0.5;
@@ -629,7 +494,7 @@ function comL2(B, rng, meta) {
   meta.shell = { x0: -w / 2, z0: fz - d, x1: w / 2, z1: fz, fhs, roofH: h, mat: 'conc' };
 }
 
-function comL3(B, rng, meta) {
+export function comL3(B, rng, meta) {
   const type = pick(rng, ['kaufhaus', 'bank', 'hotel', 'buero', 'supermarkt', 'kino', 'post', 'restaurant']);
   meta.signKey = type;
   const glassy = type === 'buero' || type === 'bank' ? rng() < 0.7 : rng() < 0.35;
@@ -663,7 +528,7 @@ function comL3(B, rng, meta) {
   meta.lamps.push([-0.42, 0.47], [0.42, 0.47]);
 }
 
-function comL4(B, rng, meta, LW, LD) {
+export function comL4(B, rng, meta, LW, LD) {
   plazaGround(B, rng, LW, LD, meta);
   const gk = pick(rng, Object.keys(GLASS));
   const total = randInt(rng, 26, 42), fh = 0.29;
@@ -1168,8 +1033,8 @@ function tvtower(B, rng, meta, LW, LD) {
 }
 
 const GEN = {
-  res1: H.resL1, res2: H.resL2, res3: (B, rng, meta) => H.resL3(B, rng, meta, resL3), res4: resL4,
-  com1: comL1, com2: comL2, com3: comL3, com4: comL4,
+  res1: H.resL1, res2: H.resL2, res3: H.resL3, res4: H.resL4,
+  com1: CM.comL1, com2: CM.comL2, com3: CM.comL3, com4: CM.comL4,
   ind1: indL1, ind2: indL2, ind3: indL3,
   park, playground, plaza, firestation, police, school, hospital, townhall, church, stadium, tvtower,
 };
@@ -1182,6 +1047,7 @@ export function localSize(b) {
 
 export function genBuilding(B, b) {
   const rng = mulberry32(b.seed);
+  TINT = null;
   const meta = { door: [0, 0.45], trees: [], lamps: [], smoke: [], fountain: null, height: 0.6, shell: null };
   const [LW, LD] = localSize(b);
   const fn = GEN[b.type];
