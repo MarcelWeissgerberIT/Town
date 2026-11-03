@@ -65,9 +65,18 @@ export async function loadModels(base = 'assets/') {
   try { const r = await fetch(`${base}models/models.json`); if (!r.ok) return; list = await r.json(); } catch (e) { return; }
   await Promise.all(Object.keys(list).map(async (name) => {
     try {
-      const r = await fetch(`${base}models/${list[name].file}`);
+      const file = list[name].file;
+      const r = await fetch(`${base}models/${file}`);
       if (!r.ok) return;
-      const { g, image } = parseGLB(await r.arrayBuffer());
+      // a GLB file, or the same bytes as base64 in JSON (for hosts that do not serve .glb)
+      let buf;
+      if (file.endsWith('.json')) {
+        const bin = atob((await r.json()).glb);
+        const u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        buf = u8.buffer;
+      } else buf = await r.arrayBuffer();
+      const { g, image } = parseGLB(buf);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.02, color: 0xd6d6d6 });
       if (image) {
         const t = new THREE.Texture(await loadImage(image));
