@@ -559,5 +559,45 @@
   "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/wRD6PTxSzjxZwjWN69MC/image_1791913022033_df64faa9_1791913022322_df5e308c.png",
   "historyId": "wsJXzsPOtti4HnPaUDhW",
   "model": "nano-banana-2"
+ },
+ "plant_hall": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681744213_418019a4_1793681744403_9c91a6f1.png",
+  "historyId": "HYL6i9LutjKbA3vEcTrx",
+  "model": "nano-banana-2"
+ },
+ "rescue_gate": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681744291_b6c1a861_1793681744334_cf4a23fc.png",
+  "historyId": "VPaZI99bMGVI87684AEw",
+  "model": "nano-banana-2"
+ },
+ "wt_head": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681746009_9e03e279_1793681746717_a33ae7c6.png",
+  "historyId": "OuHMawxN1kEqmoaylhj1",
+  "model": "nano-banana-2"
+ },
+ "mva_panel": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681748492_06eded46_1793681748630_64d68250.png",
+  "historyId": "37fRxYs2q7tlGMqLGAfD",
+  "model": "nano-banana-2"
+ },
+ "solar": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681748458_e185552e_1793681748901_e0c7570b.png",
+  "historyId": "cgJtHeJqdoSAZsC3cgmJ",
+  "model": "nano-banana-2"
+ },
+ "coal": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681750395_04f0fabf_1793681750841_7d941c9a.png",
+  "historyId": "B5wEmKrAxuRFjCHt7wqk",
+  "model": "nano-banana-2"
+ },
+ "trash": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681751039_8fb0294e_1793681751679_c8388471.png",
+  "historyId": "nfPrBA23zzOYfONrjWEu",
+  "model": "nano-banana-2"
+ },
+ "basin": {
+  "url": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793681754168_6d2d8e38_1793681754987_670b1ce3.png",
+  "historyId": "x5cGHxH0H4dPN5N29oDl",
+  "model": "nano-banana-2"
  }
 }

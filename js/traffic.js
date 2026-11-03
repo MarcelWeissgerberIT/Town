@@ -14,11 +14,11 @@ const TYPES = {
   hatch: vt('Kleinwagen', 'hatch', 0.82, 80),
   kombi: vt('Kombi', 'kombi', 0.85, 70),
   taxi: vt('Taxi', 'taxi', 0.85, 20, '#efe6c8'),
-  police: vt('Polizeistreife', 'police', 0.9, 20, '#f4f5f4'),
+  police: vt('Polizeistreife', 'police', 0.9, 24, '#f4f5f4'),
   bus: vt('Linienbus', 'bus', 0.62, 12, '#f2c230'),
-  garbage: vt('Müllabfuhr', 'garbage', 0.55, 10, '#f07b1d'),
-  fire: vt('Feuerwehr', 'fire', 1.0, 8, '#d42a1f'),
-  ambulance: vt('Rettungswagen', 'ambulance', 1.0, 8, '#f6f6f2'),
+  garbage: vt('Müllwagen', 'garbage', 0.75, 40, '#f07b1d'),
+  fire: vt('Feuerwehr', 'fire', 1.0, 10, '#d42a1f'),
+  ambulance: vt('Rettungswagen', 'ambulance', 1.0, 20, '#f6f6f2'),
   van: vt('Lieferwagen', 'van', 0.75, 40),
   post: vt('Postauto', 'post', 0.75, 6, '#ffcc00'),
   truck: vt('Lastwagen', 'truck', 0.6, 30),
@@ -216,6 +216,54 @@ export class Traffic {
     return this.addVehicle(type, path, { ...opts, endOffset: opts.endOffset ?? 0, dest: b, offmap: !a });
   }
 
+  // drive from road tiles to the nearest of a set of goal tiles
+  drive(type, starts, goals, opts = {}) {
+    const g = goals instanceof Set ? goals : new Set(goals);
+    if (!starts.length || !g.size) return null;
+    const kp = this.nav.bfs(starts, (k) => g.has(k), opts.depth || 160);
+    if (!kp) return null;
+    const path = [...(opts.pre || []), ...this.pathTiles(kp), ...(opts.post || [])];
+    if (path.length < 2) return null;
+    return this.addVehicle(type, path, { ...opts, offmap: !!opts.pre });
+  }
+  // a start just outside the map on a road leaving it
+  edgeStart() {
+    const edges = this.nav.edgeTiles();
+    if (!edges.length) return null;
+    const e = pick(this.rng, edges);
+    return { starts: [e.k], pre: this.outerTiles(e, 14, true) };
+  }
+  // the road tile a vehicle currently stands on (end of its path)
+  tileOf(v) {
+    const last = v.path[v.path.length - 1];
+    const N = this.world.N;
+    if (!this.world.inb(last[0], last[1])) return -1;
+    return last[1] * N + last[0];
+  }
+  // send a vehicle on from where it stands; goals: tile set, or 'edge' to leave the map
+  reroute(v, goals, dwell = 0) {
+    const k = this.tileOf(v);
+    if (k < 0 || !this.world.road[k]) return false;
+    let kp, post = [];
+    if (goals === 'edge') {
+      const edges = this.nav.edgeTiles();
+      if (!edges.length) return false;
+      const set = new Map(edges.map((e) => [e.k, e]));
+      kp = this.nav.bfs([k], (x) => set.has(x), 200);
+      if (!kp) return false;
+      post = this.outerTiles(set.get(kp[kp.length - 1]), 14, false);
+    } else {
+      const g = goals instanceof Set ? goals : new Set(goals);
+      if (g.has(k)) kp = [k, k];
+      else kp = this.nav.bfs([k], (x) => g.has(x), 200);
+      if (!kp) return false;
+    }
+    const path = [...this.pathTiles(kp), ...post];
+    if (path.length < 2) return false;
+    v.path = path; v.i = 0; v.s = 0; v.seg = makeSeg(v.path, 0); v.dwellAtEnd = dwell;
+    return true;
+  }
+
   buildingsBy(filter) { const out = []; for (const b of this.world.buildings.values()) if (b.state === 'done' && filter(b)) out.push(b); return out; }
   nearView(list, view) {
     if (!view || !list.length) return list;
@@ -250,11 +298,6 @@ export class Traffic {
     if (ind.length && shops.length && this.vehicles.filter((v) => v.type === 'van' && v.role === 'delivery').length < 1 + shops.length / 12 && rng() < 0.25) {
       this.trip('van', pick(rng, ind), pick(rng, this.nearView(shops, view)), { role: 'delivery', color: '#e9e9e6', name: 'Lieferwagen' });
     }
-    // garbage truck rounds
-    if (sim.pop > 80 && this.vehicles.filter((v) => v.type === 'garbage').length < Math.min(4, 1 + sim.pop / 2500) && homes.length && hour > 6 && hour < 18) {
-      const v = this.trip('garbage', null, pick(rng, this.nearView(homes, view)), { role: 'rounds', data: { legs: 5 } });
-      if (v) v.dwellAtEnd = 3;
-    }
     // post van
     if (sim.pop > 300 && this.vehicles.filter((v) => v.type === 'post').length < 2 && hour > 8 && hour < 17 && rng() < 0.05) {
       const v = this.trip('post', null, pick(rng, this.nearView(homes, view)), { role: 'rounds', data: { legs: 4 } });
@@ -265,12 +308,6 @@ export class Traffic {
       if (this.vehicles.filter((v) => v.type === 'police' && v.data.home === st.id).length < 2 && rng() < 0.08) {
         const to = pick(rng, this.nearView(homes.length ? homes : work, view));
         this.trip('police', st, to, { role: 'patrol', data: { home: st.id, legs: 3 } });
-      }
-    }
-    // ambulances
-    for (const h of this.buildingsBy((b) => b.type === 'hospital')) {
-      if (this.vehicles.filter((v) => v.type === 'ambulance' && v.data.home === h.id).length < 1 && rng() < 0.03 && homes.length) {
-        this.trip('ambulance', h, pick(rng, homes), { role: 'patrol', data: { home: h.id, legs: 1, siren: true } });
       }
     }
     this.spawnBuses(sim);
@@ -314,6 +351,7 @@ export class Traffic {
   // next leg when a vehicle reaches the end of its path
   arrive(v) {
     const rng = this.rng;
+    if (v.ctl) return v.ctl.arrive(v, this);
     if (v.role === 'bus') {
       const d = v.data; const from = d.order[d.at]; d.at = (d.at + 1) % d.order.length;
       const kp = this.nav.bfs([from], (k) => k === d.order[d.at], 200);
@@ -462,6 +500,7 @@ export class Traffic {
       v.pos[0] = out[0]; v.pos[1] = out[1];
       if (Math.hypot(out[2], out[3]) > 1e-4) { v.pos[2] = out[2]; v.pos[3] = out[3]; }
     }
+    for (const v of this.vehicles) if (v.done && v.ctl?.gone) v.ctl.gone(v);
     this.vehicles = this.vehicles.filter((v) => !v.done);
     this.draw();
   }
@@ -525,7 +564,7 @@ export class Traffic {
   beaconLevel(v) {
     const t = this.time * 7 + v.id * 1.7;
     if (v.data.siren) return (t % 2) < 1 ? 1.5 : 0.18;
-    if (v.type === 'garbage' && v.role === 'rounds') return 0.7 + 0.9 * Math.max(0, Math.sin(t * 0.9));
+    if (v.type === 'garbage' && v.data.collecting) return 0.7 + 0.9 * Math.max(0, Math.sin(t * 0.9));
     return 0.45;
   }
 
@@ -541,6 +580,7 @@ export class Traffic {
     }
     return best;
   }
-  clear() { this.vehicles = []; this.draw(); }
+  clear() { for (const v of this.vehicles) v.ctl?.gone?.(v); this.vehicles = []; this.draw(); }
+  count(fn) { let n = 0; for (const v of this.vehicles) if (!v.leaving && fn(v)) n++; return n; }
 }
 export { TYPES as VEHICLE_TYPES };

@@ -3,7 +3,7 @@ import { World, buildingName } from './world.js';
 import { ChunkManager } from './chunks.js';
 import { Nature } from './nature.js';
 import { Builder } from './geom.js';
-import { genBuilding, localSize } from './buildgen.js';
+import { genBuilding, localSize, setGenWorld } from './buildgen.js';
 import { DIR_ANGLE, mulberry32 } from './util.js';
 import { GROW, SERVICES } from './config.js';
 
@@ -13,6 +13,7 @@ export class Game {
     this.scene = scene; this.M = M;
     this.world = new World(20261013);
     this.world.genTerrain();
+    setGenWorld(this.world);
     this.chunks = new ChunkManager(scene, this.world, M);
     this.nature = new Nature(scene, this.world, M);
     this.treesDirty = true;
@@ -23,7 +24,7 @@ export class Game {
   emit(ev, ...a) { for (const f of this.listeners[ev] || []) f(...a); }
 
   makeBuilding(type, x, z, w, h, rot, extra = {}) {
-    const kind = type.startsWith('res') ? 'res' : type.startsWith('com') ? 'com' : type.startsWith('ind') ? 'ind' : 'svc';
+    const kind = SERVICES[type] ? 'svc' : type.startsWith('res') ? 'res' : type.startsWith('com') ? 'com' : type.startsWith('ind') ? 'ind' : 'svc';
     const level = kind === 'svc' ? 0 : Number(type.slice(3));
     const seed = Math.floor(Math.random() * 1e9);
     const b = { id: 0, type, kind, level, x, z, w, h, rot, seed, state: 'build', progress: 0, pop: 0, jobs: 0, name: '', ...extra };
@@ -49,6 +50,11 @@ export class Game {
     b.smoke = meta.smoke.map((s) => { const p = W([s[0], s[2]]); return [p[0], s[1], p[1]]; });
     b.fountain = meta.fountain ? (() => { const p = W([meta.fountain[0], meta.fountain[2]]); return [p[0], meta.fountain[1], p[1]]; })() : null;
     b.beacon = meta.beacon ? (() => { const p = W([meta.beacon[0], meta.beacon[1]]); return [p[0], meta.beacon[2], p[1]]; })() : null;
+    b.rotors = meta.rotors ? meta.rotors.map((r) => ({ x: B.wx(r[0], r[1]), z: B.wz(r[0], r[1]), y: r[2], yaw: t.a + (r[3] || 0) })) : null;
+    b.steam = meta.steam ? meta.steam.map((s) => { const p = W([s[0], s[2]]); return [p[0], s[1], p[1], s[3] || 0.3]; }) : null;
+    b.anchor = meta.anchor ? (() => { const p = W([meta.anchor[0], meta.anchor[1]]); return [p[0], meta.anchor[2], p[1]]; })() : null;
+    b.splash = meta.splash ? W(meta.splash) : null;
+    b.fillLevel = meta.fillLevel;
     b.height = meta.height;
     b.shell = meta.shell;
     b.flags = { wander: !!meta.wander, kids: !!meta.kids, pigeons: !!meta.pigeons, station: meta.station || null };
@@ -71,8 +77,8 @@ export class Game {
     this.world.genVillage((...a) => this.makeBuilding(...a));
     for (const b of this.world.buildings.values()) {
       const L = GROW[b.kind]?.[b.level];
-      if (b.kind === 'res') b.pop = L ? Math.round((L.pop[0] + L.pop[1]) / 2) : 0;
-      if (b.kind === 'com' || b.kind === 'ind') b.jobs = L ? Math.round((L.jobs[0] + L.jobs[1]) / 2) : 0;
+      if (b.kind === 'res') b.pop = b.popMax = L ? Math.round((L.pop[0] + L.pop[1]) / 2) : 0;
+      if (b.kind === 'com' || b.kind === 'ind') b.jobs = b.jobsMax = L ? Math.round((L.jobs[0] + L.jobs[1]) / 2) : 0;
       if (b.kind === 'svc') b.jobs = SERVICES[b.type] ? 6 : 0;
       this.realize(b);
     }

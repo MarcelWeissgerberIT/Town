@@ -67,6 +67,14 @@ export const SIGNS = {
   arkaden: { t: 'Lindenau Arkaden', bg: '#1f2d3a', fg: '#f3c66b' },
   konzern: { t: 'Hansa AG', bg: '#0f1b2d', fg: '#e8edf3' },
   tanke: { t: 'Tankstelle', bg: '#0d5c3a', fg: '#ffd400' },
+  praxis: { t: 'Arztpraxis', bg: '#f4f4f0', fg: '#1f6f5c' },
+  rettung: { t: 'Rettungswache', bg: '#c4161c', fg: '#ffffff' },
+  stadtwerke: { t: 'Stadtwerke', bg: '#13406b', fg: '#ffffff' },
+  wertstoff: { t: 'Wertstoffhof', bg: '#2e7d4f', fg: '#ffffff' },
+  mva: { t: 'Müllheizkraftwerk', bg: '#2b2f36', fg: '#f2a640' },
+  klaer: { t: 'Kläranlage', bg: '#e8f1f8', fg: '#1d5f8a' },
+  wasserwerk: { t: 'Wasserwerk', bg: '#1d5f8a', fg: '#ffffff' },
+  kraftwerk: { t: 'Kraftwerk', bg: '#3a3d42', fg: '#f2c230' },
 };
 
 function tex(canvas, srgb = true, repeat = false) {
@@ -285,6 +293,7 @@ function cellAlias(name) {
     kl90_win: 'br_win_red', kl90_door: 'br_door_red', dk_win: 'apt_win_grey', eco_win: 'apt_win_white',
     plat_win: 'apt_win_grey', plat_bal: 'apt_bal_grey', hh70_win: 'apt_bal_beige', super_front: 'shop_general',
     kauf_win: 'stone_win_beige', office_band: 'glass_silver', office_punch: 'stone_win_grey',
+    plant_hall: 'br_ind_red', rescue_gate: 'garage_grey', wt_head: 'br_win_red', mva_panel: 'metal_blue',
   }[name];
 }
 // neutral base cell of each tintable family (procedural atlas: the white variant)
@@ -302,7 +311,7 @@ export class Atlas {
     this.size = cellPx * 16;
     this.cells = {};
     this.next = 0;
-    this.nextSign = 16 * 11; // signs: two per 4x1 block, stacked in half-height slots
+    this.nextSign = 16 * 10; // signs: two per 4x1 block, stacked in half-height slots
     this.tint = new Set();    // cells whose plaster can be tinted per house
     this.neutral = [0.949, 0.937, 0.91];
     this.cColor = canvas(this.size);
@@ -918,7 +927,7 @@ async function loadPhotoTextures(quality) {
   paintSigns(A);
   A.build();
   A.photo = true;
-  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'roof_slate', 'roof_pantile', 'roof_thatch', 'roof_shingle', 'roof_green', 'leaves', 'needles'];
+  const names = ['grass', 'cobble', 'asphalt', 'dirt', 'sand', 'gravel', 'field', 'roof_tile', 'roof_metal', 'roof_slate', 'roof_pantile', 'roof_thatch', 'roof_shingle', 'roof_green', 'leaves', 'needles', 'solar', 'coal', 'trash', 'basin'];
   const imgs = await Promise.all(names.map((n) => loadImage(`${base}tex/${n}.jpg`)));
   const out = { atlas: A };
   names.forEach((n, i) => {
@@ -932,8 +941,21 @@ async function loadPhotoTextures(quality) {
   return {
     atlas: A, grass: out.grass, cobble: out.cobble, asphalt: out.asphalt, dirt: out.dirt, sand: out.sand,
     gravel: out.gravel, field: out.field, roofTile: out.roof_tile, roofMetal: out.roof_metal, roofSlate: out.roof_slate, roofPantile: out.roof_pantile, roofThatch: out.roof_thatch, roofShingle: out.roof_shingle, roofGreen: out.roof_green,
-    leaves: out.leaves, needles: out.needles, photo: true,
+    leaves: out.leaves, needles: out.needles, solar: out.solar, coal: out.coal, trash: out.trash, basin: out.basin, photo: true,
   };
+}
+
+function solarTex(n) {
+  const c = canvas(n), x = c.getContext('2d');
+  x.fillStyle = '#e8edf2'; x.fillRect(0, 0, n, n);
+  const k = n / 8;
+  for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+    x.fillStyle = (i + j) % 3 ? '#1b2a44' : '#1e3050';
+    x.fillRect(i * k + 1.5, j * k + 1.5, k - 3, k - 3);
+    x.fillStyle = 'rgba(200,210,225,0.35)';
+    x.fillRect(i * k + 1.5, j * k + k / 2 - 0.5, k - 3, 1);
+  }
+  return c;
 }
 
 function commonTextures(T, quality) {
@@ -969,6 +991,10 @@ export function makeTextures(quality) {
     gravel: tex(noiseTex(gs / 2, '#d4d4d0', ['#8d8d88', '#f4f4f0', '#a9a39a'], 12, 0.7), true, true),
     field: tex(fieldTex(gs / 2), true, true),
     roofTile: tex(roofTileTex(256), true, true),
+    solar: tex(solarTex(256), true, true),
+    coal: tex(noiseTex(gs / 2, '#2a2a2c', ['#0e0e10', '#4a4a4e', '#1b1b1d'], 14, 0.8), true, true),
+    trash: tex(noiseTex(gs / 2, '#7d7464', ['#c23b2c', '#2f6db5', '#e8e2d4', '#3f7a3a', '#f1c40f', '#5a5144'], 16, 0.9), true, true),
+    basin: tex(noiseTex(gs / 2, '#8a7656', ['#d9cdb0', '#5e4f38', '#b8a37c'], 9, 0.7), true, true),
     roofMetal: tex(metalRoofTex(128), true, true),
     photo: false,
   };

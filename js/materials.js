@@ -6,6 +6,8 @@ export const U = {
   uLight: { value: 0 },   // 0 = day; windows with aLit <= uLight are lit
   uGlow: { value: 0 },    // overall intensity of artificial light
   uTime: { value: 0 },
+  uPolTex: { value: null }, // water pollution per map tile (red channel)
+  uPolN: { value: 72 },
 };
 
 function litInject(mat, mode) {
@@ -116,6 +118,22 @@ export function makeMaterials(T) {
     normalScale: new THREE.Vector2(0.28, 0.28), envMapIntensity: 0.6,
   });
   M.water.normalMap.repeat.set(0.25, 0.25);
+  // polluted water turns murky brown-green (per tile pollution texture)
+  M.water.onBeforeCompile = (sh) => {
+    sh.uniforms.uPolTex = U.uPolTex; sh.uniforms.uPolN = U.uPolN;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D uPolTex; uniform float uPolN;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        vec2 puv = vWPos.xz / uPolN;
+        float pol = (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0) ? texture2D(uPolTex, puv).r : 0.0;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.29, 0.27, 0.12), clamp(pol * 1.5, 0.0, 0.82));`);
+  };
+  const tx = (t, rep) => { if (t && rep) t.repeat.set(rep, rep); return t; };
+  M.solar = new THREE.MeshStandardMaterial({ map: tx(T.solar), vertexColors: true, roughness: 0.18, metalness: 0.4, envMapIntensity: 1.2 });
+  M.coal = new THREE.MeshStandardMaterial({ map: T.coal, vertexColors: true, roughness: 0.8 });
+  M.trash = new THREE.MeshStandardMaterial({ map: T.trash, vertexColors: true, roughness: 0.95 });
+  M.basin = new THREE.MeshStandardMaterial({ map: T.basin, vertexColors: true, roughness: 0.35, metalness: 0.05 });
   return M;
 }
 

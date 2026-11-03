@@ -36,6 +36,37 @@ Taxi, Polizeistreife mit Lichtbalken, Rettungswagen, Feuerwehr mit Drehleiter, M
 Linienbus, Postauto, Umzugswagen, Lkw und Betonmischer. Blaulichter blinken bei Einsätzen.
 Autos bremsen vor dem Ziel ab und blenden beim Parken weich aus, statt plötzlich zu verschwinden.
 
+## Eine echte Simulation
+
+Jedes Haus braucht **Strom** und **Wasser**, der **Müll** muss abgeholt werden, Kranke brauchen
+**Ärzte** und **Rettungswagen**. Anfangs hilft der Landkreis über die Straßen am Kartenrand – aber
+nur ein wenig und teuer. Wer wachsen will, muss planen:
+
+- **Strom:** Windräder (je nach Wind), Solarparks (nur tagsüber), Stromspeicher, Wasser-, Kohle- und
+  Gaskraftwerke. Großkraftwerke speisen ins Hochspannungsnetz: Stromleitungen mit Masten ziehen und
+  über ein Umspannwerk mit den Straßen verbinden. Reicht der Strom nicht, gibt es reihum Stromausfälle –
+  Fenster bleiben dunkel, Firmen machen Verluste.
+- **Wasser und Abwasser:** Brunnen (Grundwasser), Wasserwerk am Fluss, Wasserturm für die Spitzen am
+  Morgen und Abend, Kläranlage. Ungeklärtes Abwasser färbt den Fluss braun und verschmutzt flussabwärts
+  das Trinkwasser.
+- **Müll:** Mülldeponie (wächst sichtbar zum Berg), Wertstoffhof und Müllverbrennung mit Strom.
+  Müllwagen fahren echte Touren; wo sie nicht hinkommen, stapeln sich Säcke an der Straße.
+- **Gesundheit und Sicherheit:** Arztpraxis, Rettungswache, Krankenhaus mit Betten. Notrufe schicken
+  Rettungswagen mit Blaulicht, die Patienten ins Krankenhaus bringen. Einbrüche rufen die Polizei,
+  Brände die Feuerwehr – ohne Wasser brennt es häufiger.
+- **Umwelt:** Luft (zieht mit dem Wind, Bäume und Parks filtern), Boden, Gewässer und Lärm.
+- **Zufriedenheit:** pro Gebäude mit allen Gründen im Infofenster. Unglückliche Leute ziehen weg, Häuser
+  stehen leer und verfallen, Firmen schließen.
+- **Haushalt:** Steuern pro Zone, Einnahmen und Ausgaben nach Posten, Kredite. Drei Schwierigkeitsgrade.
+- **Ansichten:** Strom, Wasser, Müll, Luft, Boden, Gewässer, Lärm, Zufriedenheit, Gesundheit, Sicherheit,
+  Bildung und Bodenwert als Kartenschicht. Ein Berater zeigt, was gerade am meisten fehlt.
+- **Region:** sechs Bauplätze (Flusstal, Seenplatte, Waldland, Ackerebene, Küste, Flussgabel). Gründe
+  weitere Städte, wechsle zwischen ihnen und schließe Lieferverträge für Strom und Wasser mit Nachbarn
+  (Leitung bzw. Straße bis zum gemeinsamen Kartenrand).
+
+Ältere Spielstände werden übernommen: Der Landkreis liefert dann noch 24 Tage lang zusätzlich Strom,
+Wasser und Müllabfuhr, damit Zeit für eigene Werke bleibt.
+
 ## Spielen
 
 **https://marcelweissgerberit.github.io/Town/** (wird bei jedem Push auf `main` über GitHub Pages veröffentlicht)
@@ -50,7 +81,8 @@ das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 | Karte verschieben | Linke Maustaste ziehen (Werkzeug „Ansehen“), WASD, Pfeiltasten | 1 Finger ziehen |
 | Zoomen | Mausrad, `+` / `−` | 2 Finger spreizen |
 | Drehen | Rechte Maustaste ziehen, `Q` / `E` | 2 Finger drehen |
-| Werkzeuge | `1`–`9` | Werkzeugleiste unten |
+| Werkzeuge | `1`–`0`, `N` Natur, `B` Bus, `X` Abriss | Werkzeugleiste unten |
+| Ansichten · Haushalt · Region | `V` · `H` · `M` | Knöpfe rechts über der Versorgung |
 | Gebäude drehen beim Platzieren | `R` | – |
 | Pause | Leertaste | Pause-Knopf |
 | Kinomodus | `K` | Kamera-Knopf |
@@ -91,7 +123,10 @@ Three.js (r169) wird per Import-Map von jsDelivr geladen.
 Optionale URL-Parameter: `?q=low|mid|tablet|high` (Grafikqualität), `?fresh` (Spielstand ignorieren),
 `?procedural` (ohne Fotoassets).
 
-Code-Überblick: `js/houses.js` enthält den Wohnhauskatalog (Stile, Farbpalette, Dachformen, Gauben,
+Code-Überblick: `js/sim.js` steuert die Simulation, `js/utilities.js` Strom-, Wasser- und
+Abwassernetze, `js/waste.js` die Müllabfuhr, `js/safety.js` Krankheit, Notrufe, Einbrüche und Brände,
+`js/pollution.js` Luft, Boden, Gewässer und Lärm, `js/region.js` die Region mit mehreren Städten.
+`js/houses.js` enthält den Wohnhauskatalog (Stile, Farbpalette, Dachformen, Gauben,
 Gärten), `js/commerce.js` den Gewerbekatalog bis zum Wolkenkratzer, `js/vehicles.js` die
 Fahrzeugmodelle samt prozeduralem Lackier-Atlas, `js/buildgen.js` die übrigen Gebäude.
 
@@ -133,6 +168,17 @@ js/geom.js          Geometrie-Builder (Buckets je Material)
 js/houses.js        Wohnhauskatalog (47 Varianten)
 js/commerce.js      Gewerbekatalog (22 Varianten, Laden bis Wolkenkratzer)
 js/buildgen.js      Gebäudegeneratoren (Industrie, Kirche, Stadion …) und Fassaden-Einfärbung
+js/utilgen.js       Kraftwerke, Windrad, Solarpark, Umspannwerk, Wasserturm, Wasserwerk, Kläranlage,
+                    Deponie, Wertstoffhof, Müllverbrennung, Arztpraxis, Rettungswache
+js/utilities.js     Strom-, Wasser- und Abwassernetz (Straßen, Hochspannung, Landkreis)
+js/waste.js         Müll und Müllwagen-Touren
+js/safety.js        Krankheit, Rettungswagen, Polizei- und Feuerwehreinsätze
+js/pollution.js     Luft, Boden, Gewässer, Lärm
+js/powerlines.js    Strommasten und Leitungen
+js/markers.js       Problem-Symbole, Müllsäcke, Rotoren
+js/heatmap.js       Kartenansichten mit Legenden
+js/terrain.js       Landschaftstypen der Region
+js/region.js        Region, Stadtgründung, Lieferverträge
 js/vehicles.js      Fahrzeugmodelle und Lackier-Atlas
 js/models.js        Menschen, Bäume, Fahrräder, Traktor, Kleinkram
 js/ground.js        Gelände, Straßen, Brücken, Ufer, Umland mit Feldern
@@ -140,7 +186,7 @@ js/chunks.js        Zusammenfassen der Geometrie in Kartenblöcke
 js/construction.js  Baustellen mit Gerüst, Kran und Bagger
 js/traffic.js       Verkehr, Ampeln, Busse, Einsatzfahrzeuge
 js/people.js        Fußgänger, Hunde, Bauarbeiter, Tauben
-js/sim.js           Nachfrage, Wachstum, Bodenwert, Finanzen
+js/sim.js           Nachfrage, Wachstum, Zufriedenheit, Bodenwert, Haushalt
 js/env.js           Sonne, Tag/Nacht, Schatten
 js/camera.js        Isometrische Kamera
 js/ui.js            Werkzeuge, Infofenster, Minimap

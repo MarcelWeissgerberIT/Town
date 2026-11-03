@@ -5,6 +5,8 @@ import * as MD from './models.js';
 import { VEH } from './vehicles.js';
 import * as H from './houses.js';
 import * as CM from './commerce.js';
+import * as UG from './utilgen.js';
+export { setGenWorld } from './utilgen.js';
 
 // ---------------------------------------------------------------------------
 // Procedural buildings. Every generator draws into a Builder whose transform
@@ -1037,6 +1039,7 @@ const GEN = {
   com1: CM.comL1, com2: CM.comL2, com3: CM.comL3, com4: CM.comL4,
   ind1: indL1, ind2: indL2, ind3: indL3,
   park, playground, plaza, firestation, police, school, hospital, townhall, church, stadium, tvtower,
+  ...UG.GEN,
 };
 
 // local lot size for a building facing direction rot

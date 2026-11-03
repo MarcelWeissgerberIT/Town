@@ -86,6 +86,12 @@ export class FX {
     const g = dark ? 0.25 : 0.82 + Math.random() * 0.1;
     this.soft.add({ x: x + (Math.random() - 0.5) * 0.03, y, z: z + (Math.random() - 0.5) * 0.03, vx: this.wind[0] + (Math.random() - 0.5) * 0.02, vy: 0.11 + Math.random() * 0.05, vz: this.wind[1], age: 0, life: 5 + Math.random() * 2, s0: 0.07, s1: 0.42, a: dark ? 0.6 : 0.42, c: [g, g, g * 1.02], c2: [g * 0.9, g * 0.9, g * 0.95], fadeIn: 0.4 });
   }
+  // big white plume from a cooling tower
+  steam(x, y, z, r = 0.4) {
+    const a = Math.random() * 6.28, d = Math.random() * r * 0.7;
+    const g = 0.9 + Math.random() * 0.08;
+    this.soft.add({ x: x + Math.cos(a) * d, y, z: z + Math.sin(a) * d, vx: this.wind[0] * 1.5 + (Math.random() - 0.5) * 0.03, vy: 0.16 + Math.random() * 0.06, vz: this.wind[1] * 1.5, age: 0, life: 6 + Math.random() * 3, s0: 0.25, s1: 0.95, a: 0.5, c: [g, g, g * 1.01], c2: [g * 0.95, g * 0.95, g], fadeIn: 0.6 });
+  }
   dust(x, z, r = 0.3) {
     this.soft.add({ x: x + (Math.random() - 0.5) * r, y: 0.03, z: z + (Math.random() - 0.5) * r, vx: (Math.random() - 0.5) * 0.05, vy: 0.03 + Math.random() * 0.03, vz: (Math.random() - 0.5) * 0.05, age: 0, life: 2 + Math.random(), s0: 0.04, s1: 0.18, a: 0.32, c: [0.8, 0.7, 0.58], fadeIn: 0.3 });
   }

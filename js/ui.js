@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { SERVICES, STAGES, GROW, COSTS, ZONE_INFO, ZONE_KEYS } from './config.js';
+import { SERVICES, STAGES, GROW, COSTS, ZONE_INFO, ZONE_KEYS, DIFFICULTY } from './config.js';
+import { VIEWS } from './heatmap.js';
+import { garbageDays } from './waste.js';
 import { fmtNum, fmtMoney, clamp, DIRS } from './util.js';
 import { siteStage, SITE_STAGES } from './construction.js';
 
@@ -9,18 +11,36 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 const TOOLS = [
   { id: 'inspect', label: 'Ansehen', icon: 'i-cursor', key: '1', hint: 'Klicke auf Häuser, Menschen oder Fahrzeuge. <b>Ziehen</b> verschiebt die Karte.' },
-  { id: 'road', label: 'Straße', icon: 'i-road', key: '2', hint: '<b>Ziehen</b>, um eine Straße zu bauen · 25 € pro Feld, Brücken 180 €' },
-  { id: 'zone1', label: 'Wohnen', icon: 'i-home', key: '3', zone: 1, color: 'var(--res)', hint: '<b>Fläche aufziehen</b>. An Straßen entstehen Häuser, sobald Nachfrage besteht.' },
+  { id: 'road', label: 'Straße', icon: 'i-road', key: '2', hint: '<b>Ziehen</b>, um eine Straße zu bauen · 25 € pro Feld, Brücken 180 €. In den Straßen liegen auch Strom- und Wasserleitungen.' },
+  { id: 'zone1', label: 'Wohnen', icon: 'i-home', key: '3', zone: 1, color: 'var(--res)', hint: '<b>Fläche aufziehen</b>. Häuser entstehen an Straßen mit Strom und Wasser, sobald Nachfrage besteht.' },
   { id: 'zone2', label: 'Gewerbe', icon: 'i-shop', key: '4', zone: 2, color: 'var(--com)', hint: '<b>Fläche aufziehen</b> für Läden, Cafés und später Kaufhäuser und Büros.' },
-  { id: 'zone3', label: 'Industrie', icon: 'i-factory', key: '5', zone: 3, color: 'var(--ind)', hint: '<b>Fläche aufziehen</b> für Werkstätten und Fabriken. Senkt den Bodenwert in der Nähe.' },
+  { id: 'zone3', label: 'Industrie', icon: 'i-factory', key: '5', zone: 3, color: 'var(--ind)', hint: '<b>Fläche aufziehen</b> für Werkstätten und Fabriken. Macht Lärm und schlechte Luft.' },
   { sep: true },
-  { id: 'nature', label: 'Natur', icon: 'i-tree', key: '6', menu: ['tree', 'park', 'playground', 'plaza'] },
-  { id: 'public', label: 'Gebäude', icon: 'i-civic', key: '7', menu: ['firestation', 'police', 'school', 'townhall', 'church', 'hospital', 'stadium', 'tvtower'] },
-  { id: 'busstop', label: 'Bus', icon: 'i-bus', key: '8', hint: 'Auf ein <b>gerades Straßenstück</b> klicken · 250 €. Ab zwei Haltestellen fährt ein Bus.' },
+  { id: 'power', label: 'Strom', icon: 'i-bolt', key: '6', view: 'power', menu: ['line', 'substation', 'wind', 'solar', 'battery', 'hydro', 'coal', 'gas'] },
+  { id: 'water', label: 'Wasser', icon: 'i-drop', key: '7', view: 'water', menu: ['well', 'watertower', 'waterworks', 'sewage'] },
+  { id: 'waste', label: 'Müll', icon: 'i-bin', key: '8', view: 'garbage', menu: ['landfill', 'recycling', 'incinerator'] },
+  { id: 'care', label: 'Dienste', icon: 'i-cross', key: '9', view: 'health', menu: ['firestation', 'police', 'clinic', 'rescue', 'hospital'] },
+  { id: 'culture', label: 'Kultur', icon: 'i-civic', key: '0', view: 'edu', menu: ['school', 'townhall', 'church', 'stadium', 'tvtower'] },
+  { id: 'nature', label: 'Natur', icon: 'i-tree', key: 'n', view: 'air', menu: ['tree', 'park', 'playground', 'plaza'] },
+  { id: 'busstop', label: 'Bus', icon: 'i-bus', key: 'b', hint: 'Auf ein <b>gerades Straßenstück</b> klicken · 250 €. Ab zwei Haltestellen fährt ein Bus.' },
   { sep: true },
-  { id: 'bulldoze', label: 'Abriss', icon: 'i-bulldoze', key: '9', color: 'var(--bad)', hint: '<b>Fläche aufziehen</b>, um Straßen, Gebäude, Zonen und Bäume zu entfernen.' },
+  { id: 'bulldoze', label: 'Abriss', icon: 'i-bulldoze', key: 'x', color: 'var(--bad)', hint: '<b>Fläche aufziehen</b>, um Straßen, Leitungen, Gebäude, Zonen und Bäume zu entfernen.' },
 ];
-
+const LINE_HINT = '<b>Ziehen</b>, um eine Hochspannungsleitung zu bauen · 30 € pro Feld. Verbinde Kraftwerke mit einem <b>Umspannwerk</b> an der Straße.';
+const VIEW_NOTES = {
+  power: 'Grüne Straßen haben noch Strom übrig, rote nicht. Großkraftwerke brauchen eine Leitung zu einem Umspannwerk.',
+  water: 'Wasser fließt durch die Straßen. Braune Punkte: hier läuft ungeklärtes Abwasser in den Fluss.',
+  garbage: 'Müllwagen fahren von Deponie, Wertstoffhof oder Müllverbrennung los.',
+  air: 'Industrie, Kraftwerke und Verkehr verschmutzen die Luft. Bäume und Parks filtern sie.',
+  ground: 'Industrie und Deponien vergiften den Boden – schlecht für Brunnen in der Nähe.',
+  river: 'Ungeklärtes Abwasser und Fabriken am Ufer verschmutzen das Wasser flussabwärts.',
+  noise: 'Laute Nachbarn machen unzufrieden: Straßen, Industrie, Windräder.',
+  mood: 'Klicke auf ein Haus, um zu sehen, was die Leute stört.',
+  health: 'Arztpraxis und Krankenhaus versorgen ihren Umkreis.',
+  safety: 'Polizei und Feuerwehr schützen ihren Umkreis.',
+  edu: 'Schulen machen Familien glücklich; spätere Industrie braucht Bildung.',
+  lv: 'Hoher Bodenwert lässt größere Häuser entstehen.',
+};
 const KIND_NAME = { res: 'Wohnen', com: 'Gewerbe', ind: 'Industrie', svc: 'Öffentlich' };
 const COVER_NAMES = { fire: 'Feuerwehr', police: 'Polizei', health: 'Gesundheit', edu: 'Bildung' };
 
@@ -50,6 +70,12 @@ export class UI {
     ex.onclick = () => this.setCinema(false);
     $('app').appendChild(ex);
     this.bindTouchTaps();
+    // panels on the right start below the top bar, whatever its height
+    const hud = document.querySelector('.hud-top');
+    const place = () => document.documentElement.style.setProperty('--hud-b', `${Math.round(hud.getBoundingClientRect().bottom)}px`);
+    window.addEventListener('resize', place);
+    if (window.ResizeObserver) new ResizeObserver(place).observe(hud);
+    place();
   }
 
   // On touch screens a button fires as soon as the finger lifts. Browsers sometimes
@@ -97,9 +123,9 @@ export class UI {
   }
   refreshToolbar() {
     for (const b of document.querySelectorAll('.tool')) {
-      const t = b.dataset.tool;
-      const on = t === this.tool || (t === 'nature' && ['tree', 'park', 'playground', 'plaza'].includes(this.placeType) && this.tool === 'place') ||
-        (t === 'public' && this.tool === 'place' && !['tree', 'park', 'playground', 'plaza'].includes(this.placeType)) || (t === 'nature' && this.tool === 'tree');
+      const t = TOOLS.find((x) => x.id === b.dataset.tool);
+      let on = t.id === this.tool;
+      if (t.menu && ((this.tool === 'place' && t.menu.includes(this.placeType)) || (this.tool === 'line' && t.id === 'power') || (this.tool === 'tree' && t.id === 'nature'))) on = true;
       b.classList.toggle('on', on);
     }
   }
@@ -107,8 +133,9 @@ export class UI {
     const t = TOOLS.find((x) => x.id === id);
     if (t && t.menu) {
       const fly = $('flyout');
-      if (!fly.hidden && fly.dataset.menu === id) { fly.hidden = true; return; }
+      if (!fly.hidden && fly.dataset.menu === id) { fly.hidden = true; this.restoreView(); return; }
       this.openFlyout(t);
+      if (t.view) this.showView(t.view, true);
       return;
     }
     $('flyout').hidden = true;
@@ -118,24 +145,44 @@ export class UI {
     this.refreshToolbar();
     this.setHint(t ? t.hint : '');
     if (id !== 'inspect') this.closeInfo();
+    if (id === 'inspect') this.restoreView();
+  }
+  // short key facts of a facility for the build menu
+  statLine(S) {
+    if (S.power?.ptype === 'battery') return `${S.power.store} MWh Speicher`;
+    if (S.power) return `${S.power.gen} MW${S.power.ptype === 'solar' ? ' mittags' : S.power.ptype === 'wind' ? ' bei Wind' : ''}`;
+    if (S.sub) return `bis ${S.sub} MW`;
+    if (S.water) return `${fmtNum(S.water.out)} m³/Tag`;
+    if (S.tower) return `${S.tower} m³ Speicher`;
+    if (S.treat) return `${fmtNum(S.treat)} m³/Tag`;
+    if (S.waste) return `${S.waste.trucks} Müllwagen`;
+    if (S.care?.beds) return `${S.care.beds} Betten`;
+    if (S.care?.ambulances) return `${S.care.ambulances} Rettungswagen`;
+    if (S.radius) return `Umkreis ${S.radius}`;
+    return '';
   }
   openFlyout(t) {
     const fly = $('flyout');
     fly.dataset.menu = t.id;
+    fly.classList.remove('views');
     fly.innerHTML = '';
     const stage = this.sim.stage;
     for (const k of t.menu) {
       const b = document.createElement('button');
       b.className = 'fcard';
       if (k === 'tree') {
-        b.innerHTML = `<b>Bäume pflanzen</b><span>${COSTS.tree} € pro Baum</span>`;
+        b.innerHTML = `<b>Bäume pflanzen</b><span>${COSTS.tree} € pro Baum</span><span class="stat2">filtern die Luft</span>`;
         b.onclick = () => { fly.hidden = true; this.tool = 'tree'; this.placeType = 'tree'; this.refreshToolbar(); this.setHint('<b>Klicken oder ziehen</b>, um Bäume zu pflanzen · 15 € pro Baum'); };
+      } else if (k === 'line') {
+        b.innerHTML = `<b>Stromleitung</b><span>${COSTS.line} € pro Feld</span><span class="stat2">Hochspannung</span>`;
+        b.title = 'Verbindet Kraftwerke, Umspannwerke und das Umland.';
+        b.onclick = () => { fly.hidden = true; this.tool = 'line'; this.placeType = null; this.refreshToolbar(); this.setHint(LINE_HINT); this.showView('power', true); };
       } else {
         const S = SERVICES[k];
         const locked = stage < S.stage;
         const exists = S.unique && [...this.game.world.buildings.values()].some((x) => x.type === k);
         if (locked || exists) b.classList.add('locked');
-        b.innerHTML = `<b>${S.name}</b><span>${locked ? `ab ${STAGES[S.stage].name}` : exists ? 'schon gebaut' : `${fmtMoney(S.cost)} · ${S.w}×${S.h}`}</span>`;
+        b.innerHTML = `<b>${S.name}</b><span>${locked ? `ab ${STAGES[S.stage].name}` : exists ? 'schon gebaut' : `${fmtMoney(S.cost)} · ${S.w}×${S.h}`}</span><span class="stat2">${this.statLine(S)}</span>`;
         b.title = S.desc;
         b.onclick = () => {
           if (locked) { this.toast(`${S.name} wird ab „${STAGES[S.stage].name}“ freigeschaltet.`, 'i-star'); return; }
@@ -149,6 +196,35 @@ export class UI {
     }
     fly.hidden = false;
   }
+  // ---- map views
+  openViews() {
+    const fly = $('flyout');
+    if (!fly.hidden && fly.dataset.menu === 'views') { fly.hidden = true; return; }
+    fly.dataset.menu = 'views';
+    fly.classList.add('views');
+    fly.innerHTML = '';
+    const mk = (key, name, ic) => {
+      const b = document.createElement('button');
+      b.className = 'fcard' + (this.heatmap.mode === key ? ' on' : '');
+      b.innerHTML = `<b>${icon(ic)} ${name}</b>`;
+      b.onclick = () => { fly.hidden = true; this.userView = key; this.showView(key); };
+      fly.appendChild(b);
+    };
+    mk(null, 'Normale Ansicht', 'i-eye');
+    for (const k in VIEWS) mk(k, VIEWS[k].name, VIEWS[k].icon);
+    fly.hidden = false;
+  }
+  showView(key, temporary = false) {
+    if (!temporary) this.userView = key;
+    this.heatmap.set(key);
+    const lg = $('legend');
+    if (!key) { lg.hidden = true; return; }
+    const V = VIEWS[key];
+    lg.innerHTML = `<h3>${icon(V.icon)}${V.name}<button data-act="x" title="Ansicht schließen">${icon('i-close')}</button></h3>${V.legend.map(([c, t]) => `<div class="row"><i class="sw" style="background:${c}"></i>${t}</div>`).join('')}<div class="note">${VIEW_NOTES[key] || ''}</div>`;
+    lg.querySelector('[data-act=x]').onclick = () => { this.userView = null; this.showView(null); };
+    lg.hidden = false;
+  }
+  restoreView() { this.showView(this.userView || null, true); }
   setHint(html) { const h = $('hint'); h.innerHTML = html || ''; h.hidden = !html || this.tool === 'inspect'; }
 
   // ------------------------------------------------------------- input
@@ -255,6 +331,9 @@ export class UI {
     else if (k === '-') this.cam.zoomAt(1.33, innerWidth / 2, innerHeight / 2);
     else if (k === 'r') { this.placeRot = (this.placeRot + 1) % 4; this.toolPreview(); }
     else if (k === 'k') this.setCinema(!this.cam.cinematic);
+    else if (k === 'v') this.openViews();
+    else if (k === 'h') this.openBudget();
+    else if (k === 'm') this.region?.open();
     else { const t = TOOLS.find((x) => x.key === k); if (t) this.pickTool(t.id); }
   }
   keyPan(dt) {
@@ -292,14 +371,15 @@ export class UI {
     const dims = (r) => [(r % 2) ? S.h : S.w, (r % 2) ? S.w : S.h];
     const at = (r) => { const [ww, hh] = dims(r); return [t[0] - Math.floor((ww - 1) / 2), t[1] - Math.floor((hh - 1) / 2), ww, hh]; };
     let [x, z, ww, hh] = at(rot);
-    if (!w.frontRoad(x, z, ww, hh, rot).length) {
+    let chk = this.sim.canPlaceService(this.placeType, x, z, ww, hh, rot);
+    if (!chk.ok) {
       for (let k = 1; k < 4; k++) {
         const r = (rot + k) % 4; const [x2, z2, w2, h2] = at(r);
-        if (w.frontRoad(x2, z2, w2, h2, r).length && w.canPlace(x2, z2, w2, h2)) { rot = r; [x, z, ww, hh] = [x2, z2, w2, h2]; break; }
+        const c2 = this.sim.canPlaceService(this.placeType, x2, z2, w2, h2, r);
+        if (c2.ok) { rot = r; [x, z, ww, hh] = [x2, z2, w2, h2]; chk = c2; break; }
       }
     }
-    const ok = w.canPlace(x, z, ww, hh) && w.frontRoad(x, z, ww, hh, rot).length > 0 && this.sim.money >= S.cost;
-    return { x, z, w: ww, h: hh, rot, ok };
+    return { x, z, w: ww, h: hh, rot, ok: chk.ok, msg: chk.msg };
   }
   toolPreview() {
     const d = this.drag;
@@ -318,6 +398,14 @@ export class UI {
         let cost = 0; for (const [x, z] of path) if (w.inb(x, z) && !w.isRoad(x, z) && !w.buildingAt(x, z)) cost += w.isWater(x, z) ? COSTS.bridge : COSTS.road;
         this.setHint(`Straße: <b>${path.length}</b> Felder · <b>${fmtMoney(cost)}</b>`);
       }
+    } else if (this.tool === 'line') {
+      const path = d ? this.lpath(d.start, d.cur) : [t];
+      ov.set(path.map(([x, z]) => {
+        const k = w.inb(x, z) ? w.idx(x, z) : -1;
+        const c = k < 0 || w.buildingAt(x, z) ? '#ef6a52' : w.pline[k] ? '#9aa4ad' : '#f2c230';
+        return [x, z, 0.07, c];
+      }));
+      if (d) { const lc = this.sim.lineCost(path); this.setHint(`Stromleitung: <b>${lc.n}</b> Felder · <b>${fmtMoney(lc.cost)}</b>`); }
     } else if (this.tool.startsWith('zone')) {
       const zn = Number(this.tool.slice(4));
       const tiles = d ? this.rect(d.start, d.cur) : [t];
@@ -339,6 +427,7 @@ export class UI {
       const fx = p.x + p.w / 2 + DIRS[p.rot].dx * (p.rot % 2 ? p.w / 2 : p.h / 2) * 0.6;
       const fz = p.z + p.h / 2 + DIRS[p.rot].dz * (p.rot % 2 ? p.w / 2 : p.h / 2) * 0.6;
       ov.showArrow(fx, fz, p.rot, '#ffffff');
+      if (!p.ok && p.msg && !this.drag?.touch) this.setHint(`<b>${SERVICES[this.placeType].name}</b> · ${esc(p.msg)}`);
     }
   }
   cancelTool() { this.overlay.clear(); this.drag = null; }
@@ -350,6 +439,11 @@ export class UI {
       if (!r.ok) this.toast(r.msg, 'i-road', 'var(--bad)');
       else this.audio?.play('build');
       this.setHint(TOOLS[1].hint);
+    } else if (this.tool === 'line') {
+      const r = sim.buildLine(this.lpath(d.start, d.cur));
+      if (!r.ok) this.toast(r.msg, 'i-pylon', 'var(--bad)');
+      else this.audio?.play('build');
+      this.setHint(LINE_HINT);
     } else if (this.tool.startsWith('zone')) {
       const zn = Number(this.tool.slice(4));
       const n = sim.zoneRect(d.start[0], d.start[1], d.cur[0], d.cur[1], zn);
@@ -413,10 +507,11 @@ export class UI {
     this.sel = sel;
     this.confirmDemolish = false;
     $('info').hidden = false;
+    document.body.classList.add('info-open');
     this.renderInfo(true);
     this.audio?.play('click');
   }
-  closeInfo() { this.sel = null; $('info').hidden = true; }
+  closeInfo() { this.sel = null; $('info').hidden = true; document.body.classList.remove('info-open'); }
 
   renderInfo(force = false) {
     const s = this.sel;
@@ -438,30 +533,7 @@ export class UI {
         html += `<div class="phase"><span>Baustelle</span><b>${phase}</b></div><div class="bar"><i style="width:${Math.round(b.progress * 100)}%"></i></div><div class="phase"><span>Fortschritt</span><span>${Math.round(b.progress * 100)} %</span></div>`;
       }
       const k = w.idx(b.x, b.z);
-      html += '<dl class="kv">';
-      if (b.variant) html += `<dt>Bauweise</dt><dd>${esc(b.variant)}</dd>`;
-      if (b.kind === 'res') html += `<dt>Bewohner</dt><dd>${b.state === 'done' ? fmtNum(b.pop) : '–'}</dd>`;
-      else html += `<dt>Arbeitsplätze</dt><dd>${b.state === 'done' ? fmtNum(b.jobs) : '–'}</dd>`;
-      if (b.kind !== 'svc') html += `<dt>Bodenwert</dt><dd>${Math.round(this.sim.lv[k])} / 100</dd>`;
-      if (S?.upkeep) html += `<dt>Unterhalt</dt><dd>${fmtMoney(S.upkeep)}/Tag</dd>`;
-      if (S?.radius) html += `<dt>Reichweite</dt><dd>${S.radius} Felder</dd>`;
-      if (b.born) html += `<dt>Fertig seit</dt><dd>Tag ${b.born}</dd>`;
-      if (b.fire) html += `<dt>Status</dt><dd style="color:var(--bad)">Brand!</dd>`;
-      html += '</dl>';
-      if (b.kind !== 'svc') {
-        html += '<div class="chips">';
-        for (const c in COVER_NAMES) html += `<span class="svc ${this.sim.cover[c][k] ? 'ok' : ''}">${COVER_NAMES[c]}</span>`;
-        html += '</div>';
-        const next = GROW[b.kind]?.[b.level + 1];
-        if (next && b.state === 'done') {
-          const miss = [];
-          if (this.sim.stage < next.stage) miss.push(`Stadtstufe „${STAGES[next.stage].name}“`);
-          if (this.sim.lv[k] < next.lv) miss.push(`Bodenwert ${next.lv}`);
-          for (const n of next.need) if (!this.sim.cover[n][k]) miss.push(COVER_NAMES[n]);
-          if (next.size === 2) miss.push('2×2 Fläche derselben Zone');
-          html += `<p class="fine">Nächste Stufe: <b>${next.name}</b>${miss.length ? ` – braucht ${miss.join(', ')}` : ' – bereit, wenn Nachfrage besteht'}.</p>`;
-        }
-      }
+      html += this.buildingFacts(b, k, S);
       html += `<div class="actions"><button class="btn" data-act="zoom">${icon('i-target')}Ansehen</button><button class="btn danger ${this.confirmDemolish ? 'confirm' : ''}" data-act="demolish">${icon('i-bulldoze')}${this.confirmDemolish ? 'Wirklich?' : 'Abreißen'}</button></div>`;
     } else if (s.type === 'person') {
       const p = s.ref;
@@ -504,6 +576,83 @@ export class UI {
       if (a === 'follow') this.follow(s);
     };
   }
+  // facts, supplies and mood of a building for the info panel
+  buildingFacts(b, k, S) {
+    const sim = this.sim, done = b.state === 'done';
+    const yes = (v, a = 'ja', n = 'nein') => (v ? `<span style="color:var(--good)">${a}</span>` : `<span style="color:var(--bad)">${n}</span>`);
+    let h = '<dl class="kv">';
+    if (b.variant) h += `<dt>Bauweise</dt><dd>${esc(b.variant)}</dd>`;
+    if (b.kind === 'res') h += `<dt>Bewohner</dt><dd>${done ? fmtNum(b.pop) : '–'}${done && b.popMax && b.pop < b.popMax ? ` / ${fmtNum(b.popMax)}` : ''}</dd>`;
+    else if (b.kind !== 'svc') h += `<dt>Arbeitsplätze</dt><dd>${done ? fmtNum(b.jobs) : '–'}</dd>`;
+    if (b.abandoned) h += `<dt>Status</dt><dd style="color:var(--bad)">${b.kind === 'res' ? 'steht leer' : 'geschlossen'}</dd>`;
+    if (b.fire) h += `<dt>Status</dt><dd style="color:var(--bad)">Brand!</dd>`;
+    if (done && (b.pUse > 0 || (b.kind !== 'svc'))) h += `<dt>Strom</dt><dd>${yes(b.pw !== 0)}</dd>`;
+    if (done && (b.wUse > 0 || (b.kind !== 'svc'))) h += `<dt>Wasser</dt><dd>${yes(b.wt !== 0)}</dd>`;
+    if (done && b.kind !== 'svc') { const g = garbageDays(b); h += `<dt>Mülltonnen</dt><dd>${g < 1 ? 'leer' : g < 3 ? `${Math.round(g)} Tage voll` : `<span style="color:var(--bad)">${Math.round(g)} Tage – stinkt!</span>`}</dd>`; }
+    if (b.kind === 'res' && b.sick) h += `<dt>Krank</dt><dd>${b.sick}</dd>`;
+    if (b.kind !== 'svc') h += `<dt>Bodenwert</dt><dd>${Math.round(sim.lv[k])} / 100</dd>`;
+    // facility details
+    if (S && done) {
+      const P = S.power;
+      if (P && P.ptype !== 'battery') h += `<dt>Leistung</dt><dd>${b.gridless ? '<span style="color:var(--bad)">nicht angeschlossen</span>' : `${(b.out || 0).toFixed(1).replace('.', ',')} MW`}</dd>`;
+      if (P?.ptype === 'battery') h += `<dt>Ladung</dt><dd>${Math.round(b.stored || 0)} / ${P.store} MWh</dd>`;
+      if (P?.ptype === 'wind') h += `<dt>Wind</dt><dd>${Math.round(sim.util.wind * 100)} %</dd>`;
+      if (S.sub) h += `<dt>Hochspannung</dt><dd>${yes(b.hv >= 0, 'angeschlossen', 'keine Leitung')}</dd><dt>Kapazität</dt><dd>${S.sub} MW</dd>`;
+      if (S.water) h += `<dt>Förderung</dt><dd>${fmtNum(b.wOut || 0)} m³/Tag</dd><dt>Wasserqualität</dt><dd>${Math.round((b.q ?? 1) * 100)} %</dd>`;
+      if (S.tower) h += `<dt>Füllstand</dt><dd>${fmtNum(b.wStored || 0)} / ${fmtNum(S.tower)} m³</dd>`;
+      if (S.treat) h += `<dt>Gereinigt</dt><dd>${fmtNum(b.treated || 0)} / ${fmtNum(S.treat)} m³/Tag</dd>`;
+      if (S.waste) {
+        const active = this.traffic.count((v) => v.type === 'garbage' && v.data.depot === b.id);
+        h += `<dt>Müllwagen</dt><dd>${active} / ${S.waste.trucks} unterwegs</dd>`;
+        if (b.type === 'landfill') h += `<dt>Füllstand</dt><dd>${fmtNum(b.fill || 0)} / ${fmtNum(S.waste.cap)} t</dd>`;
+        if (S.waste.recycle) h += `<dt>Lager</dt><dd>${Math.round(b.store || 0)} / ${S.waste.cap} t</dd>`;
+        if (S.waste.burn) h += `<dt>Bunker</dt><dd>${Math.round(b.bunker || 0)} / ${S.waste.cap} t</dd>`;
+      }
+      if (S.care?.ambulances) h += `<dt>Rettungswagen</dt><dd>${this.traffic.count((v) => v.type === 'ambulance' && v.data.station === b.id)} / ${S.care.ambulances} im Einsatz</dd>`;
+      if (S.care?.beds) h += `<dt>Betten belegt</dt><dd>${(b.patients || []).length} / ${S.care.beds}</dd>`;
+      if (S.upkeep) h += `<dt>Unterhalt</dt><dd>${fmtMoney(S.upkeep * sim.diff.upkeep)}/Tag</dd>`;
+      if (S.radius && S.cover) h += `<dt>Reichweite</dt><dd>${S.radius} Felder</dd>`;
+    }
+    if (b.born) h += `<dt>Fertig seit</dt><dd>Tag ${b.born}</dd>`;
+    h += '</dl>';
+    // what a facility needs to work
+    if (S && done) {
+      const tips = [];
+      if (S.power?.hv && b.gridless) tips.push('Ziehe eine Stromleitung zu einem Umspannwerk an der Straße oder baue das Umspannwerk direkt daneben.');
+      if (S.power && !S.power.hv && b.gridless) tips.push('Liegt an keiner Straße: mit einer Stromleitung zu einem Umspannwerk verbinden.');
+      if (S.sub && b.hv < 0) tips.push('Ohne Hochspannungsleitung oder Kraftwerk daneben verteilt es keinen Strom.');
+      if (b.pw === 0 && b.pUse > 0) tips.push('Ohne Strom läuft hier nichts.');
+      if (S.waste && this.sim.waste.isFull(b)) tips.push('Voll! Es kann kein Müll mehr angenommen werden.');
+      if (b.rc < 0 && !S.noRoad) tips.push('Keine Straße vor der Tür.');
+      if (tips.length) h += `<p class="fine" style="color:var(--bad)">${tips.join(' ')}</p>`;
+    }
+    // mood with reasons
+    if (done && b.kind !== 'svc' && b.moodParts) {
+      const m = Math.round(b.mood ?? 60);
+      const col = m >= 60 ? 'var(--good)' : m >= 35 ? 'var(--accent)' : 'var(--bad)';
+      h += `<div class="mood"><div class="mrow"><span>Zufriedenheit</span><b style="color:${col}">${m} %</b></div><div class="meter"><i style="width:${m}%;background:${col}"></i></div>`;
+      const neg = b.moodParts.filter((p) => p[1] < 0).slice(0, 4);
+      const pos = b.moodParts.filter((p) => p[1] > 0).slice(-3).reverse();
+      for (const [l, v] of [...neg, ...pos]) h += `<div class="mrow"><span>${esc(l)}</span><b class="${v > 0 ? 'pos' : 'neg'}">${v > 0 ? '+' : '−'}${Math.abs(v)}</b></div>`;
+      h += '</div>';
+    }
+    if (b.kind !== 'svc') {
+      h += '<div class="chips">';
+      for (const c in COVER_NAMES) h += `<span class="svc ${sim.cover[c][k] ? 'ok' : ''}">${COVER_NAMES[c]}</span>`;
+      h += '</div>';
+      const next = GROW[b.kind]?.[b.level + 1];
+      if (next && done && !b.abandoned) {
+        const miss = [];
+        if (sim.stage < next.stage) miss.push(`Stadtstufe „${STAGES[next.stage].name}“`);
+        if (sim.lv[k] < next.lv) miss.push(`Bodenwert ${next.lv}`);
+        for (const n of next.need) if (!sim.cover[n][k]) miss.push(COVER_NAMES[n]);
+        if ((b.mood ?? 60) < 55) miss.push('zufriedene Bewohner');
+        if (next.size === 2) miss.push('2×2 Fläche derselben Zone');
+        h += `<p class="fine">Nächste Stufe: <b>${next.name}</b>${miss.length ? ` – braucht ${miss.join(', ')}` : ' – bereit, wenn Nachfrage, Strom und Wasser reichen'}.</p>`;
+      }
+    }
+    return h;
+  }
   follow(s) {
     const ref = s.ref;
     if (s.type === 'person') this.cam.follow = () => (ref.dead ? null : ref.mode === 'inside' ? (ref.dest ? { x: ref.dest.door[0], z: ref.dest.door[1] } : null) : { x: ref.x, z: ref.z });
@@ -524,6 +673,11 @@ export class UI {
     $('btnCinema').onclick = () => this.setCinema(!this.cam.cinematic);
     $('btnDay').onclick = () => this.cycleDay();
     $('btnMenu').onclick = () => this.openMenu();
+    $('btnViews').onclick = () => this.openViews();
+    $('btnBudget').onclick = () => this.openBudget();
+    $('btnRegion').onclick = () => this.region?.open();
+    for (const b of document.querySelectorAll('.sup')) b.onclick = () => { const v = b.dataset.view; this.showView(this.heatmap.mode === v ? null : v); };
+    $('advice').onclick = (e) => { const a = e.target.closest('[data-adv]'); if (a) this.adviceAction(a.dataset.adv); };
     $('btnSound').onclick = () => {
       const on = this.audio?.toggle();
       $('btnSound').innerHTML = icon(on ? 'i-sound' : 'i-mute');
@@ -579,8 +733,132 @@ export class UI {
       else { el.style.bottom = `${50 + v * 50}%`; el.style.height = `${-v * 50}%`; }
     };
     bar('dR', s.demand.res); bar('dC', s.demand.com); bar('dI', s.demand.ind);
+    this.updateSupply();
     if (this.sel) this.renderInfo();
     if (this.cam.follow === null && !$('followPill').hidden) $('followPill').hidden = true;
+  }
+
+  updateSupply() {
+    const s = this.sim, st = s.util.stats;
+    if (!st) return;
+    const set = (id, frac, text, cls) => {
+      $(id).style.width = `${clamp(frac, 0, 1) * 100}%`;
+      $(`${id}t`).textContent = text;
+      const row = $(id).closest('.sup');
+      row.classList.toggle('bad', cls === 'bad'); row.classList.toggle('warn', cls === 'warn');
+    };
+    const f1 = (v) => (v >= 10 ? Math.round(v) : v.toFixed(1)).toString().replace('.', ',');
+    const P = st.power;
+    set('supP', P.demand > 0 ? P.supplied / P.demand : 1, `${f1(P.supplied)} / ${f1(P.demand)} MW`, P.short > 0.005 ? 'bad' : P.imp > P.demand * 0.6 && P.demand > 0.5 ? 'warn' : '');
+    const W = st.water, SW = st.sewage;
+    set('supW', W.demand > 0 ? W.supplied / W.demand : 1, `${fmtNum(W.supplied)} / ${fmtNum(W.demand)} m³`, W.short > 0.5 ? 'bad' : SW.untreated > 2 ? 'warn' : '');
+    const G = s.waste.stats;
+    let homes = 0; for (const b of this.game.world.buildings.values()) if (b.state === 'done' && b.kind !== 'svc') homes++;
+    const lf = G.landfillCap ? G.landfill / G.landfillCap : 0;
+    set('supG', 1 - Math.min(1, G.overflow / Math.max(4, homes * 0.25)), G.overflow ? `${G.overflow} Häuser` : G.landfillCap ? `Deponie ${Math.round(lf * 100)} %` : `${f1(G.open)} t`, G.overflow > homes * 0.1 ? 'bad' : G.overflow || lf > 0.85 ? 'warn' : '');
+    const H = s.safety.stats;
+    let pop = 0, sick = 0; for (const b of this.game.world.buildings.values()) if (b.kind === 'res' && b.state === 'done') { pop += b.pop; sick += b.sick || 0; }
+    set('supH', 1 - Math.min(1, sick / Math.max(1, pop * 0.05)), H.waiting ? `${H.waiting} Notruf${H.waiting > 1 ? 'e' : ''}` : `${sick} krank`, H.waiting ? 'bad' : sick > pop * 0.03 ? 'warn' : '');
+    if (performance.now() - (this.lastAdvice || 0) > 2000) { this.lastAdvice = performance.now(); this.renderAdvice(); }
+  }
+
+  // what the town needs most right now
+  issues() {
+    const s = this.sim, st = s.util.stats, w = this.game.world, out = [];
+    if (!st) return out;
+    const now = s.day + s.hour / 24;
+    const P = st.power, W = st.water;
+    const facs = [...w.buildings.values()].filter((b) => b.state === 'done');
+    if (P.unpowered > 0) out.push({ k: 'power', sev: 9, ic: 'i-bolt', t: `Stromausfall: ${P.unpowered} Gebäude ohne Strom. Baue Windräder oder ein Kraftwerk.` });
+    else if (now - (s.blocked?.power || -9) < 0.6) out.push({ k: 'power', sev: 6, ic: 'i-bolt', t: 'Für neue Häuser fehlt Strom. Baue Windräder, Solarparks oder ein Kraftwerk.' });
+    const loose = facs.filter((b) => b.gridless || (SERVICES[b.type]?.sub && b.hv < 0));
+    if (loose.length) out.push({ k: 'loose', sev: 7, ic: 'i-pylon', t: `${SERVICES[loose[0].type].name} ist nicht angeschlossen: Stromleitung zu einem Umspannwerk an der Straße ziehen.`, b: loose[0] });
+    if (W.dry > 0) out.push({ k: 'water', sev: 9, ic: 'i-drop', t: `Wassermangel: ${W.dry} Gebäude ohne Wasser. Baue Brunnen oder ein Wasserwerk.` });
+    else if (now - (s.blocked?.water || -9) < 0.6) out.push({ k: 'water', sev: 6, ic: 'i-drop', t: 'Für neue Häuser fehlt Wasser. Baue einen Brunnen oder ein Wasserwerk am Fluss.' });
+    if (st.sewage.untreated > 2) out.push({ k: 'sewage', sev: 5, ic: 'i-drop', t: 'Ungeklärtes Abwasser verschmutzt den Fluss. Baue eine Kläranlage am Ufer.' });
+    if (W.quality < 0.8) out.push({ k: 'quality', sev: 6, ic: 'i-drop', t: 'Das Trinkwasser ist schlecht und macht krank. Hol Wasser flussaufwärts oder aus sauberem Boden.' });
+    const G = s.waste.stats;
+    const depots = facs.filter((b) => SERVICES[b.type]?.waste);
+    if (G.overflow > 0) out.push({ k: 'garbage', sev: G.overflow > 10 ? 8 : 5, ic: 'i-bin', t: depots.length ? `Müll türmt sich an ${G.overflow} Häusern – mehr Müllwagen nötig.` : `Müll türmt sich an ${G.overflow} Häusern. Baue eine Mülldeponie.` });
+    const full = depots.find((b) => s.waste.isFull(b) || (b.type === 'landfill' && (b.fill || 0) > SERVICES.landfill.waste.cap * 0.85));
+    if (full) out.push({ k: 'full', sev: 7, ic: 'i-bin', t: `${SERVICES[full.type].name} ist ${s.waste.isFull(full) ? 'voll' : 'fast voll'}. Baue eine neue Deponie oder eine Müllverbrennung.`, b: full });
+    if (s.safety.stats.waiting) out.push({ k: 'sos', sev: 8, ic: 'i-cross', t: `${s.safety.stats.waiting} Notruf(e) warten auf einen Rettungswagen. Baue eine Rettungswache.` });
+    if (s.money < 0) out.push({ k: 'money', sev: 9, ic: 'i-coin', t: 'Die Stadtkasse ist leer! Steuern erhöhen, sparen oder einen Kredit aufnehmen.' });
+    else if (s.incomePerDay < s.upkeepPerDay && s.money < 8000) out.push({ k: 'money', sev: 6, ic: 'i-coin', t: 'Die Stadt gibt mehr aus, als sie einnimmt.' });
+    if (s.unemployment > 0.15 && s.pop > 150) out.push({ k: 'jobs', sev: 5, ic: 'i-work', t: `${Math.round(s.unemployment * 100)} % arbeitslos. Weise Gewerbe- und Industriegebiete aus.` });
+    let badAir = 0; for (const b of facs) if (b.kind === 'res' && s.pollution.at(s.pollution.air, b) > 40) badAir++;
+    if (badAir > 2) out.push({ k: 'air', sev: 5, ic: 'i-cloud', t: `Schlechte Luft in ${badAir} Wohnhäusern. Industrie und Kraftwerke weiter weg, Bäume pflanzen.` });
+    const empty = facs.filter((b) => b.abandoned).length;
+    if (empty) out.push({ k: 'empty', sev: 6, ic: 'i-home', t: `${empty} Gebäude stehen leer. Klicke darauf, um zu sehen, was fehlt.` });
+    if (s.grace && s.day < s.grace.until) out.push({ k: 'grace', sev: 4, ic: 'i-star', t: `Übergang: Der Landkreis liefert noch ${Math.ceil(s.grace.until - s.day)} Tage extra Strom und Wasser. Baue eigene Werke!`, tip: true });
+    return out.sort((a, b) => b.sev - a.sev);
+  }
+  renderAdvice() {
+    const list = this.issues();
+    this.issueList = list;
+    // first time a serious problem shows up: a toast
+    const seen = this.seenIssues || (this.seenIssues = new Set());
+    for (const i of list) if (i.sev >= 7 && !seen.has(i.k)) { seen.add(i.k); this.toast(i.t, i.ic, 'var(--bad)', () => this.adviceAction(i.k)); }
+    for (const k of [...seen]) if (!list.some((i) => i.k === k)) seen.delete(k);
+    let html = list.slice(0, 2).map((i) => `<button class="adv ${i.tip ? 'tip' : ''}" data-adv="${i.k}">${icon(i.ic)}<span>${esc(i.t)}</span></button>`).join('');
+    if (!list.length && this.sim.pop > 0) {
+      const tips = ['Tipp: Ein Klick auf ein Haus zeigt, was die Leute glücklich oder unglücklich macht.', 'Tipp: Mit „Ansichten“ siehst du Strom, Wasser, Luft und Lärm als Karte.', 'Tipp: Industrie weit weg von Wohnhäusern – Lärm und Abgase stören.', 'Tipp: Gründe in der Region weitere Städte und handle Strom und Wasser.'];
+      const t = tips[Math.floor(this.sim.day / 2) % tips.length];
+      html = `<button class="adv tip" data-adv="tip">${icon('i-star')}<span>${t}</span></button>`;
+    }
+    if ($('advice').innerHTML !== html) $('advice').innerHTML = html;
+  }
+  adviceAction(k) {
+    const i = (this.issueList || []).find((x) => x.k === k);
+    if (i?.b) { const b = i.b; this.cam.lookAt(b.x + b.w / 2, b.z + b.h / 2, 3); this.select({ type: 'building', ref: b }); }
+    const menus = { power: 'power', loose: 'power', water: 'water', sewage: 'water', quality: 'water', garbage: 'waste', full: 'waste', sos: 'care' };
+    const views = { power: 'power', loose: 'power', water: 'water', sewage: 'river', quality: 'river', garbage: 'garbage', full: 'garbage', sos: 'health', air: 'air', empty: 'mood', jobs: 'mood' };
+    if (k === 'money') { this.openBudget(); return; }
+    if (k === 'tip') { this.openViews(); return; }
+    if (menus[k] && !i?.b) this.pickTool(menus[k]);
+    if (views[k]) this.showView(views[k], !!menus[k]);
+  }
+
+  // ---- budget: taxes, income and spending, loans
+  openBudget() {
+    const s = this.sim;
+    const L = { taxRes: 'Steuern Wohnen', taxCom: 'Steuern Gewerbe', taxInd: 'Steuern Industrie', powerSold: 'Stromverkauf ans Umland', services: 'Öffentliche Gebäude und Werke', admin: 'Verwaltung und Personal', roads: 'Straßen, Leitungen, Haltestellen', powerImp: 'Strom vom Landkreis', waterImp: 'Wasser vom Landkreis', sewageImp: 'Abwasser zum Landkreis', loans: 'Kreditraten', contracts: 'Verträge mit Nachbarstädten' };
+    const O = { build: 'Bauen', garbageExt: 'Müllabfuhr des Landkreises', rescueExt: 'Rettungsdienst des Landkreises', fireExt: 'Feuerwehr des Landkreises', recycling: 'Verkauf von Wertstoffen', loan: 'Kredite' };
+    const row = (l, v) => `<tr><td>${l}</td><td class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmtMoney(Math.abs(v))}</td></tr>`;
+    const render = () => {
+      s.recount();
+      let h = '';
+      for (const k in s.flows) if (Math.abs(s.flows[k]) >= 0.5) h += row(L[k] || k, s.flows[k]);
+      h += `<tr class="sum"><td>Pro Tag</td><td class="${s.incomePerDay - s.upkeepPerDay >= 0 ? 'pos' : 'neg'}">${s.incomePerDay - s.upkeepPerDay >= 0 ? '+' : '−'}${fmtMoney(Math.abs(s.incomePerDay - s.upkeepPerDay))}</td></tr>`;
+      let o = '';
+      for (const k in s.ledger.yesterday) if (Math.abs(s.ledger.yesterday[k]) >= 1) o += row(O[k] || k, s.ledger.yesterday[k]);
+      return { h, o };
+    };
+    const tax = (k, n) => `<label class="tax"><span>${n}</span><input type="range" min="0" max="20" step="1" value="${s.tax[k]}" data-tax="${k}"><b id="tx_${k}">${s.tax[k]} %</b></label>`;
+    const loans = () => (s.loans.length ? s.loans.map((l, i) => `<div class="deal"><span>Kredit ${i + 1}: noch ${fmtMoney(l.left)}</span><b class="neg">−${fmtMoney(l.perDay)}/Tag</b></div>`).join('') : '<p class="fine">Keine Kredite.</p>');
+    const r = render();
+    this.openModal(`<div class="budget">
+      <h1>Haushalt</h1>
+      <p class="lead">Kasse: <b>${fmtMoney(s.money)}</b> · Schwierigkeit: ${esc(s.diff.name)}</p>
+      <h2>Steuern</h2>
+      ${tax('res', 'Wohnen')}${tax('com', 'Gewerbe')}${tax('ind', 'Industrie')}
+      <p class="fine">Höhere Steuern bringen mehr Geld, machen die Leute aber unzufriedener und bremsen die Nachfrage.</p>
+      <h2>Einnahmen und Ausgaben pro Tag</h2>
+      <table class="btable" id="bFlows">${r.h}</table>
+      ${r.o ? `<h2>Einmalig gestern</h2><table class="btable">${r.o}</table>` : ''}
+      <h2>Kredite</h2>
+      <div id="bLoans">${loans()}</div>
+      <div class="actions"><button class="btn" id="bTake" ${s.loans.length >= s.loanInfo.max ? 'disabled' : ''}>${icon('i-coin')}Kredit aufnehmen (${fmtMoney(s.loanInfo.amount)})</button><button class="btn" id="bRepay" ${s.loans.length ? '' : 'disabled'}>Kredit ablösen</button></div>
+      <p class="fine">Ein Kredit wird in ${s.loanInfo.days} Tagen mit ${Math.round((s.loanInfo.total - 1) * 100)} % Zinsen zurückgezahlt.</p>
+      <div class="actions"><button class="btn primary" id="mClose">Schließen</button></div></div>`);
+    for (const inp of document.querySelectorAll('[data-tax]')) inp.oninput = () => {
+      s.tax[inp.dataset.tax] = Number(inp.value);
+      $(`tx_${inp.dataset.tax}`).textContent = `${inp.value} %`;
+      $('bFlows').innerHTML = render().h;
+    };
+    $('bTake').onclick = () => { if (s.takeLoan()) { this.toast(`Kredit über ${fmtMoney(s.loanInfo.amount)} aufgenommen.`, 'i-coin'); this.openBudget(); } };
+    $('bRepay').onclick = () => { if (s.repayLoan()) { this.toast('Kredit abgelöst.', 'i-coin'); this.openBudget(); } else this.toast('Dafür reicht das Geld nicht.', 'i-coin', 'var(--bad)'); };
+    $('mClose').onclick = () => this.closeModal();
   }
 
   drawMinimap() {
@@ -651,9 +929,27 @@ export class UI {
         <kbd>Klick</kbd><span>Haus, Person oder Auto ansehen – und ihnen folgen</span>
         <kbd>K</kbd><span>Kinomodus: zurücklehnen und zuschauen</span>
       </div>
-      <p>Vom <b>Dorf</b> zur <b>Kleinstadt</b>, <b>Stadt</b>, <b>Großstadt</b> und <b>Metropole</b>: Jede Stufe schaltet neue Gebäude frei.</p>
+      <p>Häuser brauchen <b>Strom</b> und <b>Wasser</b>, der Müll muss abgeholt werden, Kranke brauchen Ärzte und Rettungswagen. Anfangs hilft der Landkreis – teuer und nur ein bisschen. Plane Kraftwerke, Leitungen, Wasserwerke, Kläranlage und Deponie, halte Luft und Fluss sauber und die Leute zufrieden, sonst ziehen sie weg.</p>
+      <p>Vom <b>Dorf</b> zur <b>Kleinstadt</b>, <b>Stadt</b>, <b>Großstadt</b> und <b>Metropole</b>. Über die <b>Region</b> gründest du weitere Städte.</p>
       <div class="actions"><button class="btn primary" id="mStart">Los geht's</button></div>`);
     $('mStart').onclick = () => { this.closeModal(); onStart?.(); };
+  }
+  // shown once when a town from before the update is loaded
+  whatsNew() {
+    this.openModal(`
+      <h1>Neu in ${esc(this.sim.cityName)}</h1>
+      <p class="lead">Aus der Stadt wird eine echte Simulation.</p>
+      <div class="howto">
+        <kbd>${icon('i-bolt')} Strom</kbd><span>Windräder, Solarparks, Kohle-, Gas- und Wasserkraft. Großkraftwerke brauchen Leitungen und ein Umspannwerk.</span>
+        <kbd>${icon('i-drop')} Wasser</kbd><span>Brunnen, Wasserturm, Wasserwerk – und eine Kläranlage, sonst wird der Fluss braun.</span>
+        <kbd>${icon('i-bin')} Müll</kbd><span>Müllwagen holen den Abfall zur Deponie, zum Wertstoffhof oder in die Verbrennung.</span>
+        <kbd>${icon('i-cross')} Gesundheit</kbd><span>Arztpraxis, Rettungswache, Krankenhaus. Notrufe brauchen Rettungswagen.</span>
+        <kbd>${icon('i-smile')} Zufriedenheit</kbd><span>Lärm, Abgase, Müll, Steuern: Unzufriedene ziehen weg, Häuser stehen leer.</span>
+        <kbd>${icon('i-map')} Region</kbd><span>Gründe weitere Städte und handle Strom und Wasser mit den Nachbarn.</span>
+      </div>
+      <p>Damit nichts zusammenbricht, liefert der Landkreis noch <b>${Math.max(0, Math.ceil((this.sim.grace?.until || 0) - this.sim.day))} Tage</b> lang extra Strom und Wasser. Nutze die Zeit für eigene Kraft- und Wasserwerke!</p>
+      <div class="actions"><button class="btn primary" id="mClose">Los geht's</button></div>`);
+    $('mClose').onclick = () => this.closeModal();
   }
   openMenu() {
     const hasSave = this.save?.exists();
@@ -663,12 +959,14 @@ export class UI {
       <div class="menu-list">
         <button class="btn" id="mSave">${icon('i-star')}Spiel speichern</button>
         <button class="btn" id="mLoad" ${hasSave ? '' : 'disabled'}>${icon('i-clock')}Gespeichertes Spiel laden</button>
+        <button class="btn" id="mRegion">${icon('i-map')}Region: weitere Städte</button>
+        <button class="btn" id="mBudget">${icon('i-chart')}Haushalt und Steuern</button>
         <button class="btn" id="mFollow">${icon('i-eye')}Einer zufälligen Person folgen</button>
         <button class="btn" id="mShadows">${icon('i-sun')}Schatten: ${this.renderer.shadowMap.enabled ? 'an' : 'aus'}</button>
         <button class="btn" id="mHelp">${icon('i-cursor')}Bedienung</button>
         <button class="btn danger" id="mNew">${icon('i-bulldoze')}Neues Spiel beginnen</button>
       </div>
-      <p class="fine">Das Spiel speichert automatisch jede Minute in diesem Browser.</p>
+      <p class="fine">Das Spiel speichert automatisch jede Minute in diesem Browser – jede Stadt der Region für sich.</p>
       <div class="actions"><button class="btn primary" id="mClose">Weiterspielen</button></div>`);
     $('mClose').onclick = () => this.closeModal();
     $('mSave').onclick = () => { const ok = this.save?.store(); this.toast(ok ? 'Spiel gespeichert.' : 'Speichern ist in diesem Browser nicht möglich.', 'i-star'); this.closeModal(); };
@@ -680,6 +978,8 @@ export class UI {
       else this.toast('Gerade ist niemand unterwegs.', 'i-people');
     };
     $('mShadows').onclick = () => { this.toggleShadows?.(); this.openMenu(); };
+    $('mRegion').onclick = () => this.region?.open();
+    $('mBudget').onclick = () => this.openBudget();
     $('mHelp').onclick = () => this.welcome();
     let armed = false;
     $('mNew').onclick = (e) => {

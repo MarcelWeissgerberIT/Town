@@ -13,10 +13,16 @@ import { People } from './people.js';
 import { FX } from './fx.js';
 import { Furniture } from './furniture.js';
 import { Overlay } from './overlay.js';
+import { PowerLines } from './powerlines.js';
+import { Markers } from './markers.js';
+import { Heatmap } from './heatmap.js';
+import { U as UNI } from './materials.js';
 import { UI } from './ui.js';
 import { SaveSystem, unb64 } from './save.js';
+import { Region } from './region.js';
 import { Soundscape } from './audio.js';
 import { MAP_N, GROW, SERVICES, STAGES } from './config.js';
+import { terrainOf } from './terrain.js';
 import { fmtNum, pick } from './util.js';
 
 const params = new URLSearchParams(location.search);
@@ -65,52 +71,102 @@ async function boot(hotData) {
   sim.cityName = 'Lindenau';
   const sites = new Sites(scene, game, M);
   const traffic = new Traffic(scene, game, M, T, Q);
+  game.traffic = traffic;
   const people = new People(scene, game, M, Q);
   const fx = new FX(scene, T);
   const furniture = new Furniture(scene, game, M, T);
   const overlay = new Overlay(scene);
+  const powerLines = new PowerLines(scene, game, M);
+  const markers = new Markers(scene, game, sim, M);
+  const heatmap = new Heatmap(scene, game.world);
+  // river pollution as a texture for the water shader
+  const polData = new Uint8Array(MAP_N * MAP_N * 4);
+  const polTex = new THREE.DataTexture(polData, MAP_N, MAP_N, THREE.RGBAFormat);
+  polTex.magFilter = THREE.LinearFilter; polTex.minFilter = THREE.LinearFilter; polTex.needsUpdate = true;
+  UNI.uPolTex.value = polTex; UNI.uPolN.value = MAP_N;
+  let polVersion = -1;
+  const updatePolTex = () => {
+    if (sim.pollution.version === polVersion) return;
+    polVersion = sim.pollution.version;
+    const wa = sim.pollution.water;
+    for (let k = 0; k < wa.length; k++) polData[k * 4] = Math.min(255, wa[k] * 4.2);
+    polTex.needsUpdate = true;
+  };
   game.chunks.rebuildAll();
 
-  const app = { game, sim, cam, traffic, people, sites, fx, overlay, renderer, canvas };
+  const app = { game, sim, cam, traffic, people, sites, fx, overlay, renderer, canvas, heatmap, markers, powerLines };
   const save = new SaveSystem(app);
   const sound = new Soundscape();
   const ui = new UI({ ...app, save, audio: sound });
   app.ui = ui;
+  app.save = save;
+  const region = new Region(app);
+  app.region = region; ui.region = region;
+  save.use(region.current);
+  sim.contracts = () => region.imports();
+  sim.contractExports = () => region.exports();
+  sim.contractMoney = () => region.money();
   let buildVersion = 0;
 
   // ---- reset or restore the whole city in place
-  app.applyState = (st) => {
+  app.applyState = (st, opts = {}) => {
     const w = game.world;
     for (const b of [...w.buildings.values()]) { w.removeBuilding(b); game.chunks.setBuildingGeo(b, null); }
     w.buildings.clear();
     w.bld.fill(-1);
+    sim.resetSystems();
+    let migrated = false;
     if (st) {
+      w.seed = st.world.seed ?? w.seed;
+      w.ttype = st.world.type || 'river';
+      w.flowOut = st.world.flowOut || terrainOf(w.ttype).flowOut;
+      w.terrainVersion++;
       w.terrain.set(unb64(st.world.terrain)); w.road.set(unb64(st.world.road)); w.zone.set(unb64(st.world.zone));
       w.trees.set(unb64(st.world.trees)); w.busstop.set(unb64(st.world.busstop));
+      if (st.world.pline) w.pline.set(unb64(st.world.pline)); else w.pline.fill(0);
+      w.lineVersion++;
       w.nextId = st.world.nextId; w.centre = st.world.centre;
       for (const o of st.buildings) {
         const b = { ...o };
+        if (b.state === 'done') { b.popMax ??= b.pop; b.jobsMax ??= b.jobs; }
         w.buildings.set(b.id, b);
         for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) w.bld[w.idx(b.x + i, b.z + j)] = b.id;
         game.realize(b);
       }
-      Object.assign(sim, { money: st.sim.money, day: st.sim.day, hour: st.sim.hour, stage: st.sim.stage, cityName: st.sim.cityName || 'Lindenau', history: st.sim.history || [] });
+      w.bver++;
+      const S = st.sim;
+      Object.assign(sim, { money: S.money, day: S.day, hour: S.hour, stage: S.stage, cityName: S.cityName || 'Lindenau', history: S.history || [] });
+      sim.tax = { res: 9, com: 9, ind: 9, ...(S.tax || {}) };
+      sim.loans = S.loans || [];
+      sim.setDifficulty(S.diff || 'normal');
+      sim.grace = S.grace || null;
+      if (st.pollution) sim.pollution.unpack({ air: unb64(st.pollution.air), ground: unb64(st.pollution.ground), water: unb64(st.pollution.water) });
+      migrated = st.v === 1;
     } else {
-      w.terrain.fill(0); w.road.fill(0); w.zone.fill(0); w.trees.fill(0); w.busstop.fill(0); w.nextId = 1;
+      w.seed = opts.seed ?? 20261013;
+      w.ttype = opts.type || 'river';
+      w.flowOut = terrainOf(w.ttype).flowOut;
+      w.terrain.fill(0); w.road.fill(0); w.zone.fill(0); w.trees.fill(0); w.busstop.fill(0); w.pline.fill(0); w.nextId = 1;
+      w.lineVersion++;
       w.genTerrain();
       game.startNew();
-      Object.assign(sim, { money: 30000, day: 1, hour: 9, stage: 0, cityName: 'Lindenau', history: [] });
+      sim.setDifficulty(opts.diff || 'normal');
+      Object.assign(sim, { money: sim.diff.money, day: 1, hour: 9, stage: 0, cityName: opts.name || 'Lindenau', history: [], tax: { res: 9, com: 9, ind: 9 }, loans: [], grace: null });
     }
+    sim.cityId = opts.id || st?.sim?.cityId || 'a';
     document.getElementById('cityName').value = sim.cityName;
     w.version++;
     for (let z = 0; z < w.N; z++) for (let x = 0; x < w.N; x++) w.markDirty(x, z);
     game.chunks.rebuildAll();
     game.countryDirty = true; game.treesDirty = true;
     sites.clear(); traffic.clear(); people.clear();
-    sim.recount(); sim.computeLandValue(); sim.computeDemand();
+    sim.recount(); sim.util.solve(0.001); sim.computeLandValue(); sim.computeDemand();
+    if (migrated) sim.migrate();
+    sim.updateMood(0);
     buildVersion++;
     cam.lookAt(w.centre[0] + 0.5, w.centre[1] + 0.5, 4.6); cam.snapPan();
     ui.closeInfo();
+    game.emit('city', { migrated });
   };
 
   ui.toggleShadows = () => {
@@ -120,10 +176,11 @@ async function boot(hotData) {
   };
 
   // restore a previous session (live-reload snapshot first, then the browser save)
-  const saved = hotData && hotData.v === 1 ? hotData : save.read();
+  const saved = hotData && hotData.v >= 1 ? hotData : save.read();
   window.claude?.hot?.snapshot?.(() => save.serialize());
-  if (saved && !params.has('fresh')) app.applyState(saved);
-  else { cam.lookAt(game.world.centre[0] + 0.5, game.world.centre[1] + 0.5, 4.6); cam.snapPan(); cam.view = cam.goalView; }
+  game.on('city', (e) => { if (e.migrated) setTimeout(() => ui.whatsNew(), 1200); });
+  if (saved && !params.has('fresh')) app.applyState(saved, { id: region.current });
+  else { sim.util.solve(0.001); sim.updateMood(0); cam.lookAt(game.world.centre[0] + 0.5, game.world.centre[1] + 0.5, 4.6); cam.snapPan(); cam.view = cam.goalView; }
 
   // ---- reactions to simulation events
   let lastBuiltToast = 0;
@@ -145,6 +202,11 @@ async function boot(hotData) {
     if (b.kind === 'res' && near(b, 1.4)) traffic.sendTo('moving', b, 'moving', 6, 'Umzugswagen');
   });
   game.on('removed', () => { buildVersion++; });
+  // the landfill mound grows with its contents
+  game.on('landfill', (b) => {
+    const lv = Math.min(10, Math.floor(Math.min(1, (b.fill || 0) / SERVICES.landfill.waste.cap) * 10 + 0.0001)) / 10;
+    if (lv !== b.fillLevel && b.state === 'done') game.realize(b);
+  });
   game.on('construction', (b) => {
     if (b.level >= 3 || (b.kind === 'svc' && b.w * b.h > 1)) ui.toast(`Baubeginn: ${b.kind === 'svc' ? SERVICES[b.type].name : GROW[b.kind][b.level].name}`, 'i-crane', null, jump(b));
   });
@@ -159,49 +221,25 @@ async function boot(hotData) {
     fireworks = 14;
     ui.audio?.play('fanfare');
   });
-  game.on('emergencyArrived', (v) => {
-    const b = game.world.buildings.get(v.data.fire);
-    if (b && b.fire) { b.fire = null; ui.toast(`Brand in ${b.name} gelöscht. Danke, Feuerwehr!`, 'i-fire', 'var(--good)', jump(b)); }
+  // messages from the simulation (emergencies, people moving out, ...): no flood of toasts
+  const noticeAt = new Map();
+  game.on('notice', (n) => {
+    const key = n.text.replace(/[„“].*?[„“]|\S+ \S+$/g, '').slice(0, 18) + (n.color || '');
+    const now = performance.now();
+    const far = n.b && !near(n.b, 1.6);
+    if (now - (noticeAt.get(key) || 0) < (far ? 25000 : 6000)) return;
+    noticeAt.set(key, now);
+    ui.toast(n.text, n.icon || 'i-star', n.color || null, n.b ? jump(n.b) : null);
   });
-
-  // fires
-  let fireTimer = 150;
-  const burning = new Set();
-  function updateFires(dt) {
-    fireTimer -= dt;
-    if (fireTimer <= 0 && sim.pop > 120) {
-      fireTimer = 160 + Math.random() * 200;
-      const all = [...game.world.buildings.values()].filter((b) => b.state === 'done' && b.kind !== 'svc' && !b.fire);
-      const vis = all.filter((b) => near(b, 0.8));
-      const b = vis.length && Math.random() < 0.7 ? pick(Math.random, vis) : pick(Math.random, all);
-      if (b) {
-        b.fire = { t: 0, truck: null };
-        burning.add(b);
-        ui.toast(`Feuer in ${b.name}! Die Feuerwehr rückt aus.`, 'i-fire', 'var(--bad)', jump(b));
-        const stations = [...game.world.buildings.values()].filter((s) => s.type === 'firestation' && s.state === 'done');
-        stations.sort((a, c) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(c.x - b.x, c.z - b.z));
-        for (const st of stations) { const v = traffic.dispatch('fire', st, b, { fire: b.id, dwell: 8 }); if (v) { b.fire.truck = v.id; break; } }
-        if (!b.fire.truck) ui.toast('Keine Feuerwache erreichbar – das Haus brennt nieder!', 'i-fire', 'var(--bad)');
-      }
-    }
-    for (const b of [...burning]) {
-      if (!game.world.buildings.has(b.id) || !b.fire) { burning.delete(b); continue; }
-      b.fire.t += dt;
-      const truck = b.fire.truck && traffic.vehicles.find((v) => v.id === b.fire.truck);
-      if (b.fire.t > (truck ? 160 : 55)) {
-        burning.delete(b);
-        ui.toast(`${b.name} ist abgebrannt.`, 'i-fire', 'var(--bad)');
-        sim.demolish(b);
-      }
-    }
-  }
 
   // emitters for smoke, fountains, dust and fire
   function updateEmitters(dt, t) {
     for (const b of game.world.buildings.values()) {
       if (!near(b, 1.1)) continue;
       if (b.state === 'done') {
-        if (b.smoke) for (const s of b.smoke) { const n = fx.rate(`s${b.id}`, 2.2, dt); for (let i = 0; i < n; i++) fx.smoke(s[0], s[1], s[2]); }
+        if (b.smoke) for (const s of b.smoke) { const n = fx.rate(`s${b.id}`, 2.2, dt); for (let i = 0; i < n; i++) fx.smoke(s[0], s[1], s[2], b.type === 'coal'); }
+        if (b.steam && (b.out || 0) > 0) for (const s of b.steam) { const n = fx.rate(`st${b.id}`, 3.2, dt); for (let i = 0; i < n; i++) fx.steam(s[0], s[1], s[2], s[3]); }
+        if (b.splash && view.ppu > 14) { const n = fx.rate(`sp${b.id}`, 22, dt); for (let i = 0; i < n; i++) fx.water(b.splash[0] + (Math.random() - 0.5) * 0.5, -0.06, b.splash[1] + (Math.random() - 0.5) * 0.5); }
         if (b.fountain && view.ppu > 18) { const n = fx.rate(`f${b.id}`, 30, dt); for (let i = 0; i < n; i++) fx.water(b.fountain[0], b.fountain[1], b.fountain[2]); }
         if (b.beacon) fx.beacon(b.beacon[0], b.beacon[1], b.beacon[2], t + b.id);
         if (b.fire) {
@@ -233,7 +271,7 @@ async function boot(hotData) {
   window.addEventListener('resize', resize);
   resize();
 
-  let last = performance.now(), elapsed = 0, autosave = 0;
+  let last = performance.now(), elapsed = 0, autosave = 0, thumbs = 0;
   function step(dt, now, render = true) {
     elapsed += dt;
     const simDt = dt * sim.speed;
@@ -244,13 +282,16 @@ async function boot(hotData) {
     view.ppu = cam.ppu();
     view.r = Math.max(cam.view * cam.aspect, cam.view / Math.sin(el)) + 1.5;
     sim.tick(simDt);
-    updateFires(simDt);
     sites.update(simDt);
     traffic.update(simDt, sim, view);
     people.update(simDt, sim, view, sites);
     updateEmitters(simDt, elapsed);
     fx.update(simDt, view.ppu * renderer.getPixelRatio());
     furniture.update(buildVersion);
+    powerLines.update();
+    markers.update(dt, view, renderer.getPixelRatio());
+    heatmap.update(dt, sim);
+    updatePolTex();
     game.update(dt);
     ui.update(dt, now);
     cam.update(dt);
@@ -265,7 +306,7 @@ async function boot(hotData) {
     }
     if (render) renderer.render(scene, cam.cam);
     autosave += dt;
-    if (autosave > 60) { autosave = 0; save.store(); }
+    if (autosave > 60) { autosave = 0; save.store(); region.snapshot(++thumbs % 5 === 0); }
   }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);

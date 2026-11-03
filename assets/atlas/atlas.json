@@ -111,12 +111,16 @@
 "ch_door": 107,
 "clock": 108,
 "hospital_win": 109,
-"raw_conc": 110,
-"raw_conc_win": 111,
-"raw_brick": 112,
-"raw_brick_win": 113
+"plant_hall": 110,
+"rescue_gate": 111,
+"wt_head": 112,
+"mva_panel": 113,
+"raw_conc": 114,
+"raw_conc_win": 115,
+"raw_brick": 116,
+"raw_brick_win": 117
 },
-"signStart": 176,
+"signStart": 160,
 "tint": [
 "win_s",
 "win_sw",

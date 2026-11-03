@@ -436,6 +436,11 @@ def build_atlas():
     add('ch_door', build_cell('ch_door', 1.0, box=(0, 0, 1, 1), rough=0.85, tile=(False, False)))
     add('clock', build_cell('clock', 1.0, box=(0.06, 0.06, 0.94, 0.94), rough=0.6, emis_fn=clock_emis, tile=(False, False)))
     add('hospital_win', build_cell('hosp_win', 1.0, box=(0, 0, 1, 1), glass='silver', curtain=True, rough=0.6, emis_color=(0.9, 0.95, 1.0)))
+    # utilities: power station hall, ambulance garage, water tower head, waste-to-energy plant
+    add('plant_hall', build_cell('plant_hall', 0.62, box=centre_box(load('plant_hall'), 0.62, y0=0.0, y1=1.0), tile=(True, False), rough=0.92, emis_color=(1.0, 0.86, 0.6)))
+    add('rescue_gate', build_cell('rescue_gate', 1.0, box=(0.03, 0.03, 0.97, 1.0), tile=(False, False), rough=0.5, emis_color=(1.0, 0.95, 0.85)))
+    add('wt_head', build_cell('wt_head', 1.0, box=(0, 0, 1, 1), tile=(True, False), rough=0.9, emis_color=(1.0, 0.85, 0.6)))
+    add('mva_panel', build_cell('mva_panel', 1.0, box=(0, 0, 1, 1), rough=0.45, emis_color=(0.9, 0.95, 1.0)))
     # raw construction
     add('raw_conc', build_cell('raw_conc', 1.0, box=(0, 0, 1, 1), rough=0.95))
     add('raw_conc_win', build_cell('raw_conc_win', 0.9, rough=0.95))
@@ -443,12 +448,12 @@ def build_atlas():
     add('raw_brick_win', build_cell('raw_brick_win', 0.9, rough=0.95))
 
     names = list(cells.keys())
-    assert len(names) <= 11 * COLS, len(names)
+    assert len(names) <= 10 * COLS, len(names)
     size = CELL * COLS
     color = np.zeros((size, size, 3), np.float32)
     emis = np.zeros((size, size, 3), np.float32)
     orm = np.zeros((size, size, 3), np.float32); orm[..., 1] = 0.9
-    manifest = {'cols': COLS, 'cells': {}, 'signStart': 11 * COLS, 'tint': tint, 'neutral': [float(v) for v in NEUTRAL]}
+    manifest = {'cols': COLS, 'cells': {}, 'signStart': 10 * COLS, 'tint': tint, 'neutral': [float(v) for v in NEUTRAL]}
     for i, n in enumerate(names):
         cx, cy = i % COLS, i // COLS
         c = cells[n]
@@ -516,6 +521,10 @@ def build_textures():
     tex('roof_thatch', 'roof_thatch', 1024, frac=0.06)
     tex('roof_shingle', 'roof_shingle', 1024, frac=0.06, fn=lambda a: gray_norm(a, 0.84))
     tex('roof_green', 'roof_green', 512, frac=0.08)
+    tex('solar', 'solar', 512, frac=0.03)
+    tex('coal', 'coal', 512)
+    tex('trash', 'trash', 512)
+    tex('basin', 'basin', 512)
     tex('leaves', 'leaves', 512)
     tex('needles', 'needles', 512)
     k = load('keyart')

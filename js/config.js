@@ -11,8 +11,8 @@ export const ZONE_INFO = {
 
 export const STAGES = [
   { name: 'Dorf', pop: 0, text: 'Ein kleines Dorf am Fluss.' },
-  { name: 'Kleinstadt', pop: 350, text: 'Stadthäuser, Feuerwache, Polizei, Schule und Rathaus sind freigeschaltet.' },
-  { name: 'Stadt', pop: 1800, text: 'Mehrfamilienhäuser, Kaufhäuser, Krankenhaus und Logistikzentren sind freigeschaltet.' },
+  { name: 'Kleinstadt', pop: 350, text: 'Stadthäuser, Polizei, Schule, Rettungswache, Kohle- und Wasserkraft, Wasserwerk und Kläranlage sind freigeschaltet.' },
+  { name: 'Stadt', pop: 1800, text: 'Mehrfamilienhäuser, Kaufhäuser, Krankenhaus, Gaskraftwerk und Müllverbrennung sind freigeschaltet.' },
   { name: 'Großstadt', pop: 7000, text: 'Wohntürme, Bürohochhäuser und das Stadion sind freigeschaltet.' },
   { name: 'Metropole', pop: 22000, text: 'Der Fernsehturm ist freigeschaltet. Deine Stadt ist eine Metropole!' },
 ];
@@ -39,22 +39,77 @@ export const GROW = {
 };
 
 // placeable buildings
+// cat: toolbar menu · use: power draw in MW · wuse: water in m³/day
+// power: gen MW (rated), ptype wind|solar|thermal|hydro|battery|waste, hv: feeds the high-voltage grid only
+// water: out m³/day, src ground|river · treat: sewage m³/day · tower: storage m³
+// waste: trucks, cap (landfill t), burn / recycle (t/day) · care: ambulances, beds
+// emit: pollution at the site {air, ground, noise, r} · place: {water: adjacent water tiles needed}
 export const SERVICES = {
-  park: { name: 'Park', w: 1, h: 1, cost: 300, upkeep: 4, radius: 4, lv: 12, happy: 2, stage: 0, cat: 'nature', desc: 'Bäume, Bänke und Blumenbeete. Erhöht den Bodenwert.' },
-  playground: { name: 'Spielplatz', w: 1, h: 1, cost: 450, upkeep: 6, radius: 4, lv: 10, happy: 3, stage: 0, cat: 'nature', desc: 'Schaukeln, Rutsche und Sandkasten für die Kinder.' },
-  plaza: { name: 'Brunnenplatz', w: 1, h: 1, cost: 600, upkeep: 6, radius: 5, lv: 14, happy: 2, stage: 0, cat: 'nature', desc: 'Ein gepflasterter Platz mit Brunnen und Tauben.' },
-  church: { name: 'Kirche', w: 1, h: 2, cost: 5000, upkeep: 30, radius: 8, lv: 10, happy: 3, stage: 0, cat: 'service', unique: true, desc: 'Ein Wahrzeichen mit Glockenturm.' },
-  firestation: { name: 'Feuerwache', w: 2, h: 1, cost: 4000, upkeep: 110, radius: 14, cover: 'fire', stage: 1, cat: 'service', desc: 'Schützt Gebäude im Umkreis vor Bränden.' },
-  police: { name: 'Polizeiwache', w: 1, h: 1, cost: 3500, upkeep: 90, radius: 13, cover: 'police', stage: 1, cat: 'service', desc: 'Sorgt für Sicherheit im Umkreis.' },
-  school: { name: 'Schule', w: 2, h: 2, cost: 6000, upkeep: 140, radius: 18, cover: 'edu', happy: 3, stage: 1, cat: 'service', desc: 'Bildung für die Kinder der Stadt.' },
-  townhall: { name: 'Rathaus', w: 2, h: 1, cost: 8000, upkeep: 60, radius: 10, lv: 14, happy: 4, stage: 1, cat: 'service', unique: true, desc: 'Sitz der Stadtverwaltung mit Uhrturm.' },
-  hospital: { name: 'Krankenhaus', w: 2, h: 2, cost: 12000, upkeep: 280, radius: 26, cover: 'health', happy: 4, stage: 2, cat: 'service', desc: 'Medizinische Versorgung mit Hubschrauberlandeplatz.' },
-  stadium: { name: 'Stadion', w: 3, h: 3, cost: 40000, upkeep: 450, radius: 0, lv: 0, happy: 10, stage: 3, cat: 'landmark', unique: true, desc: 'Fußball am Wochenende. Macht die ganze Stadt glücklicher.' },
-  tvtower: { name: 'Fernsehturm', w: 2, h: 2, cost: 80000, upkeep: 300, radius: 30, lv: 18, happy: 8, stage: 4, cat: 'landmark', unique: true, desc: 'Das Wahrzeichen der Metropole.' },
+  park: { name: 'Park', w: 1, h: 1, cost: 300, upkeep: 4, radius: 4, lv: 12, happy: 2, stage: 0, cat: 'nature', green: 3, desc: 'Bäume, Bänke und Blumenbeete. Filtert die Luft und macht die Nachbarn froh.' },
+  playground: { name: 'Spielplatz', w: 1, h: 1, cost: 450, upkeep: 6, radius: 4, lv: 10, happy: 3, stage: 0, cat: 'nature', green: 2, desc: 'Schaukeln, Rutsche und Sandkasten für die Kinder.' },
+  plaza: { name: 'Brunnenplatz', w: 1, h: 1, cost: 600, upkeep: 6, radius: 5, lv: 14, happy: 2, stage: 0, cat: 'nature', green: 1, wuse: 8, desc: 'Ein gepflasterter Platz mit Brunnen und Tauben.' },
+  church: { name: 'Kirche', w: 1, h: 2, cost: 5000, upkeep: 30, radius: 8, lv: 10, happy: 3, stage: 0, cat: 'culture', unique: true, use: 0.03, desc: 'Ein Wahrzeichen mit Glockenturm.' },
+  townhall: { name: 'Rathaus', w: 2, h: 1, cost: 8000, upkeep: 60, radius: 10, lv: 14, happy: 4, stage: 1, cat: 'culture', unique: true, use: 0.1, wuse: 10, desc: 'Sitz der Stadtverwaltung mit Uhrturm.' },
+  school: { name: 'Schule', w: 2, h: 2, cost: 6000, upkeep: 140, radius: 18, cover: 'edu', happy: 3, stage: 1, cat: 'culture', use: 0.25, wuse: 40, desc: 'Bildung für die Kinder der Stadt. Firmen brauchen gut ausgebildete Leute.' },
+  stadium: { name: 'Stadion', w: 3, h: 3, cost: 40000, upkeep: 450, radius: 0, lv: 0, happy: 10, stage: 3, cat: 'culture', unique: true, use: 1.5, wuse: 120, emit: { noise: 45, r: 4 }, desc: 'Fußball am Wochenende. Macht die ganze Stadt glücklicher.' },
+  tvtower: { name: 'Fernsehturm', w: 2, h: 2, cost: 80000, upkeep: 300, radius: 30, lv: 18, happy: 8, stage: 4, cat: 'culture', unique: true, use: 0.6, desc: 'Das Wahrzeichen der Metropole.' },
+
+  firestation: { name: 'Feuerwache', w: 2, h: 1, cost: 4000, upkeep: 110, radius: 14, cover: 'fire', stage: 0, cat: 'care', use: 0.08, wuse: 30, crit: true, desc: 'Löscht Brände im Umkreis. Ohne Wasser in den Leitungen brennt es öfter.' },
+  police: { name: 'Polizeiwache', w: 1, h: 1, cost: 3500, upkeep: 90, radius: 13, cover: 'police', stage: 1, cat: 'care', use: 0.06, wuse: 6, crit: true, desc: 'Streifen und Einsätze gegen Einbrüche im Umkreis.' },
+  clinic: { name: 'Arztpraxis', w: 1, h: 1, cost: 2500, upkeep: 45, radius: 8, cover: 'health', stage: 0, cat: 'care', use: 0.04, wuse: 6, crit: true, care: { treat: 1 }, desc: 'Hausärztin für die Nachbarschaft. Kranke werden schneller gesund.' },
+  rescue: { name: 'Rettungswache', w: 2, h: 1, cost: 5500, upkeep: 120, radius: 18, stage: 1, cat: 'care', use: 0.06, wuse: 6, crit: true, care: { ambulances: 2 }, desc: 'Zwei Rettungswagen für Notfälle. Patienten kommen ins Krankenhaus.' },
+  hospital: { name: 'Krankenhaus', w: 2, h: 2, cost: 12000, upkeep: 280, radius: 26, cover: 'health', happy: 4, stage: 2, cat: 'care', use: 1.0, wuse: 140, crit: true, care: { ambulances: 3, beds: 60, treat: 2 }, desc: '60 Betten, drei Rettungswagen und ein Hubschrauberlandeplatz.' },
+
+  substation: { name: 'Umspannwerk', w: 1, h: 1, cost: 1800, upkeep: 18, stage: 0, cat: 'power', sub: 30, desc: 'Verbindet Hochspannungsleitungen und Großkraftwerke mit dem Stromnetz in den Straßen. Bis 30 MW.' },
+  wind: { name: 'Windrad', w: 1, h: 1, cost: 3800, upkeep: 22, stage: 0, cat: 'power', power: { gen: 3, ptype: 'wind' }, noRoad: true, emit: { noise: 32, r: 2 }, desc: '3 MW bei kräftigem Wind, bei Flaute fast nichts. Laut für direkte Nachbarn.' },
+  solar: { name: 'Solarpark', w: 2, h: 2, cost: 6500, upkeep: 16, stage: 0, cat: 'power', power: { gen: 6, ptype: 'solar' }, noRoad: true, desc: 'Bis 6 MW mittags, nachts nichts. Ganz ohne Abgase.' },
+  battery: { name: 'Stromspeicher', w: 1, h: 1, cost: 7000, upkeep: 35, stage: 1, cat: 'power', power: { ptype: 'battery', store: 40, rate: 10 }, noRoad: true, desc: 'Speichert 40 MWh Überschuss, z. B. Solarstrom für die Nacht. Gibt bis 10 MW ab.' },
+  hydro: { name: 'Wasserkraftwerk', w: 2, h: 1, cost: 18000, upkeep: 140, stage: 1, cat: 'power', power: { gen: 10, ptype: 'hydro', hv: true }, place: { water: 2 }, noRoad: true, desc: '10 MW rund um die Uhr aus dem Fluss. Muss am Ufer stehen.' },
+  coal: { name: 'Kohlekraftwerk', w: 3, h: 3, cost: 26000, upkeep: 380, stage: 1, cat: 'power', power: { gen: 60, ptype: 'thermal', hv: true }, emit: { air: 70, ground: 1.2, noise: 35, r: 3 }, use: 0, wuse: 300, desc: '60 MW, billig im Betrieb – aber Ruß und Abgase machen die Nachbarn krank.' },
+  gas: { name: 'Gaskraftwerk', w: 2, h: 2, cost: 34000, upkeep: 520, stage: 2, cat: 'power', power: { gen: 40, ptype: 'thermal', hv: true }, emit: { air: 20, noise: 28, r: 2 }, wuse: 120, desc: '40 MW, sauberer als Kohle, aber teures Gas.' },
+
+  well: { name: 'Brunnen', w: 1, h: 1, cost: 1600, upkeep: 18, stage: 0, cat: 'water', water: { out: 160, src: 'ground' }, use: 0.12, crit: true, desc: 'Pumpt 160 m³ Grundwasser am Tag. Verschmutzter Boden macht das Wasser schlecht.' },
+  watertower: { name: 'Wasserturm', w: 1, h: 1, cost: 4500, upkeep: 25, stage: 0, cat: 'water', tower: 600, crit: true, desc: 'Speichert 600 m³ für die Spitzenzeiten morgens und abends.' },
+  waterworks: { name: 'Wasserwerk', w: 2, h: 2, cost: 14000, upkeep: 160, stage: 1, cat: 'water', water: { out: 2400, src: 'river' }, place: { water: 1 }, use: 1.2, crit: true, desc: 'Bereitet 2.400 m³ Flusswasser am Tag auf. Verschmutzter Fluss = schlechteres Wasser.' },
+  sewage: { name: 'Kläranlage', w: 2, h: 2, cost: 16000, upkeep: 170, stage: 1, cat: 'water', treat: 2400, place: { water: 1 }, use: 1.0, crit: true, emit: { air: 6, r: 2 }, desc: 'Reinigt 2.400 m³ Abwasser am Tag. Ungeklärtes Abwasser verschmutzt den Fluss.' },
+
+  landfill: { name: 'Mülldeponie', w: 3, h: 3, cost: 7500, upkeep: 70, stage: 0, cat: 'waste', waste: { trucks: 4, cap: 4000 }, emit: { ground: 6, air: 8, r: 3 }, use: 0.05, desc: 'Vier Müllwagen, Platz für 4.000 t. Stinkt und verschmutzt den Boden.' },
+  recycling: { name: 'Wertstoffhof', w: 2, h: 1, cost: 9000, upkeep: 80, stage: 1, cat: 'waste', waste: { trucks: 3, recycle: 30, cap: 120 }, use: 0.15, desc: 'Drei Müllwagen. Verwertet 30 t am Tag und verkauft die Rohstoffe.' },
+  incinerator: { name: 'Müllverbrennung', w: 2, h: 2, cost: 38000, upkeep: 420, stage: 2, cat: 'waste', waste: { trucks: 5, burn: 70, cap: 500 }, power: { gen: 8, ptype: 'waste', hv: true }, emit: { air: 16, noise: 15, r: 2 }, desc: 'Fünf Müllwagen. Verbrennt 70 t am Tag und erzeugt dabei 8 MW Strom.' },
 };
 
-export const COSTS = { road: 25, bridge: 180, tree: 15, bulldoze: 5, busstop: 250, zone: 0 };
-export const UPKEEP = { road: 0.6, busstop: 15 };
+export const CATS = {
+  power: { name: 'Strom', icon: 'i-bolt' },
+  water: { name: 'Wasser', icon: 'i-drop' },
+  waste: { name: 'Müll', icon: 'i-bin' },
+  care: { name: 'Dienste', icon: 'i-cross' },
+  culture: { name: 'Kultur', icon: 'i-civic' },
+  nature: { name: 'Natur', icon: 'i-tree' },
+};
+
+// consumption per resident (res) or job (com, ind): power MW, water m³/day, garbage t/day
+export const NEEDS = {
+  res: { power: 0.001, water: 0.15, garbage: 0.002 },
+  com: { power: 0.002, water: 0.05, garbage: 0.0015 },
+  ind: { power: 0.005, water: 0.2, garbage: 0.004 },
+};
+// the district (Landkreis) supplies a small village through the roads leaving the map
+export const EXTERNAL = {
+  power: { cap: 2, price: 95, hvCap: 40, hvPrice: 70, sell: 25 },
+  water: { cap: 180, price: 1.2 },
+  sewage: { cap: 180, price: 0.9 },
+  garbage: { trucks: 2, price: 80 },
+};
+export const TRUCK_LOAD = 4;
+export const TAX_DEFAULT = 9;
+export const DIFFICULTY = {
+  easy: { name: 'Entspannt', money: 60000, income: 1.2, upkeep: 0.8, risk: 0.6, desc: 'Mehr Startgeld, geringere Kosten, seltener Brände und Krankheiten.' },
+  normal: { name: 'Normal', money: 30000, income: 1, upkeep: 1, risk: 1, desc: 'Die Stadt will gut geplant sein.' },
+  hard: { name: 'Anspruchsvoll', money: 18000, income: 0.88, upkeep: 1.2, risk: 1.35, desc: 'Knappe Kasse, höhere Kosten, mehr Notfälle.' },
+};
+
+export const COSTS = { road: 25, bridge: 180, tree: 15, bulldoze: 5, busstop: 250, zone: 0, line: 30 };
+export const UPKEEP = { road: 0.6, busstop: 15, line: 0.3 };
 
 export const DAY_SECONDS = 150; // real seconds per in-game day at 1x speed
 

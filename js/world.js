@@ -1,12 +1,16 @@
 import { MAP_N, ZONE, GROW, SERVICES } from './config.js';
-import { mulberry32, fbm, hash2, DIRS, personName, pick, LAST_NAMES } from './util.js';
+import { mulberry32, DIRS, personName, pick, LAST_NAMES } from './util.js';
+import { genTerrain, terrainOf } from './terrain.js';
 
 export const MARGIN = 30; // decorative countryside around the playable map
 
 export class World {
-  constructor(seed = 1337) {
+  constructor(seed = 1337, type = 'river') {
     this.N = MAP_N;
     this.seed = seed;
+    this.ttype = type;
+    this.flowOut = terrainOf(type).flowOut;
+    this.terrainVersion = 0;
     const n = this.N * this.N;
     this.terrain = new Uint8Array(n);   // 0 land, 1 water
     this.road = new Uint8Array(n);
@@ -14,6 +18,9 @@ export class World {
     this.bld = new Int32Array(n).fill(-1);
     this.trees = new Uint8Array(n);     // wild trees on a tile (0..3)
     this.busstop = new Uint8Array(n);   // 0 none, 1..4 = side+1
+    this.pline = new Uint8Array(n);     // high-voltage power line over this tile
+    this.lineVersion = 0;               // bumps whenever power lines change
+    this.bver = 0;                      // bumps whenever buildings are added or removed
     this.buildings = new Map();
     this.nextId = 1;
     this.version = 0;                   // bumps whenever roads change
@@ -41,31 +48,17 @@ export class World {
   }
   markDirty(x, z) { this.dirtyTiles.add(this.idx(x, z)); }
 
-  // river centre line (also used outside the map)
-  riverX(z) {
-    const N = this.N;
-    return N * 0.7 + Math.sin(z * 0.075 + 1.3) * 5.5 + Math.sin(z * 0.19) * 1.6;
-  }
-  riverW(z) { return 2.4 + Math.sin(z * 0.05 + 2) * 0.6; }
-  outerWater(x, z) {
-    const cx = this.riverX(z + 0.5), w = this.riverW(z);
-    return Math.abs(x + 0.5 - cx) < w / 2;
-  }
+  // water outside the map continues the landscape (rivers, lakes, coast)
+  outerWater(x, z) { return terrainOf(this.ttype).water(x, z, this.N, false, this.seed); }
 
-  genTerrain() {
-    const N = this.N;
-    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
-      const i = this.idx(x, z);
-      if (this.outerWater(x, z)) { this.terrain[i] = 1; continue; }
-      // a small pond
-      const dx = x - N * 0.18, dz = z - N * 0.2;
-      if (dx * dx / 9 + dz * dz / 5 < 1) { this.terrain[i] = 1; continue; }
-      const f = fbm(x * 0.09, z * 0.09, this.seed);
-      const cdx = x - N * 0.42, cdz = z - N * 0.5;
-      const centre = Math.hypot(cdx, cdz);
-      if (f > 0.58 && centre > 11) this.trees[i] = f > 0.66 ? 3 : f > 0.62 ? 2 : 1;
-      else if (hash2(x, z, 77) < 0.025 && centre > 6) this.trees[i] = 1;
-    }
+  genTerrain() { genTerrain(this, this.ttype, this.seed); }
+
+  setLine(x, z, on) {
+    const i = this.idx(x, z);
+    this.pline[i] = on ? 1 : 0;
+    if (on && !this.road[i]) { this.zone[i] = 0; this.trees[i] = 0; }
+    this.lineVersion++;
+    this.markDirty(x, z);
   }
 
   setRoad(x, z, on) {
@@ -101,7 +94,7 @@ export class World {
       const tx = x + i, tz = z + j;
       if (!this.inb(tx, tz)) return false;
       const k = this.idx(tx, tz);
-      if (this.terrain[k] === 1 || this.road[k] || this.bld[k] >= 0) return false;
+      if (this.terrain[k] === 1 || this.road[k] || this.bld[k] >= 0 || this.pline[k]) return false;
       if (!allowZoned && this.zone[k]) return false;
     }
     return true;
@@ -110,6 +103,7 @@ export class World {
   addBuilding(b) {
     b.id = this.nextId++;
     this.buildings.set(b.id, b);
+    this.bver++;
     for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
       const k = this.idx(b.x + i, b.z + j);
       this.bld[k] = b.id; this.trees[k] = 0;
@@ -119,6 +113,7 @@ export class World {
   }
   removeBuilding(b) {
     this.buildings.delete(b.id);
+    this.bver++;
     for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
       const k = this.idx(b.x + i, b.z + j);
       if (this.bld[k] === b.id) this.bld[k] = -1;
@@ -129,7 +124,8 @@ export class World {
   // ---- the starting village
   genVillage(makeBuilding) {
     const N = this.N;
-    const cx = Math.round(N * 0.42), cz = Math.round(N * 0.5);
+    const T = terrainOf(this.ttype);
+    const cx = Math.round(N * T.centre[0]), cz = Math.round(N * T.centre[1]);
     this.centre = [cx, cz];
     const line = (x0, z0, x1, z1) => {
       const dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
@@ -140,9 +136,13 @@ export class World {
         x += dx; z += dz;
       }
     };
-    // main street from the western edge, cross street, a few lanes
-    line(0, cz, cx + 8, cz);
-    line(cx, cz - 9, cx, cz + 9);
+    // main street from the edge of the map, cross street, a few lanes
+    const entry = T.entry;
+    if (entry === 'W') line(0, cz, cx + 8, cz);
+    else if (entry === 'E') line(N - 1, cz, cx - 8, cz);
+    else if (entry === 'S') { line(cx, N - 1, cx, cz - 9); line(cx - 8, cz, cx + 8, cz); }
+    else { line(cx, 0, cx, cz + 9); line(cx - 8, cz, cx + 8, cz); }
+    if (entry === 'W' || entry === 'E') line(cx, cz - 9, cx, cz + 9);
     line(cx - 6, cz - 5, cx + 6, cz - 5);
     line(cx - 6, cz - 5, cx - 6, cz);
     line(cx + 6, cz - 5, cx + 6, cz + 5);
@@ -182,10 +182,15 @@ export class World {
       this.trees[this.idx(x, z)] = 0;
     }
     // a little workshop area at the village entrance
-    for (let x = 6; x <= 11; x++) for (const z of [cz - 1, cz + 1]) {
-      if (this.canPlace(x, z, 1, 1)) { this.zone[this.idx(x, z)] = ZONE.IND; this.trees[this.idx(x, z)] = 0; }
+    const ws = [];
+    for (let t = 6; t <= 11; t++) for (const o of [-1, 1]) {
+      if (entry === 'W') ws.push([t, cz + o]);
+      else if (entry === 'E') ws.push([N - 1 - t, cz + o]);
+      else if (entry === 'S') ws.push([cx + o, N - 1 - t]);
+      else ws.push([cx + o, t]);
     }
-    place('ind1', 8, cz - 1, 1, 1, 2);
+    for (const [x, z] of ws) if (this.canPlace(x, z, 1, 1)) { this.zone[this.idx(x, z)] = ZONE.IND; this.trees[this.idx(x, z)] = 0; }
+    for (const [x, z] of ws) { const d = this.facingFor(x, z, 1, 1); if (d >= 0 && place('ind1', x, z, 1, 1, d)) break; }
     for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) this.markDirty(x, z);
   }
 }
