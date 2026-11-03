@@ -1,0 +1,27 @@
+{
+ "parkhaus": {
+  "file": "parkhaus.glb",
+  "tris": 10167,
+  "kb": 1001
+ },
+ "tiefgarage": {
+  "file": "tiefgarage.glb",
+  "tris": 6797,
+  "kb": 761
+ },
+ "kv_brunnen": {
+  "file": "kv_brunnen.glb",
+  "tris": 5490,
+  "kb": 483
+ },
+ "kv_skulptur": {
+  "file": "kv_skulptur.glb",
+  "tris": 4943,
+  "kb": 428
+ },
+ "kv_wagen": {
+  "file": "kv_wagen.glb",
+  "tris": 6174,
+  "kb": 553
+ }
+}

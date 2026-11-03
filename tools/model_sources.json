@@ -1,0 +1,28 @@
+{
+ "_note": "Erzeugt mit Meshy 7 Image-to-3D über Higgsfield; Vorlagebilder mit OpenArt (Nano Banana 2).",
+ "parkhaus": {
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3IeQIYGph9rwir5I1EaapEuUzyZ/hf_20261103_055856_4cda1854-03df-4566-a22e-d13ea32a036d.glb",
+  "job": "4cda1854-03df-4566-a22e-d13ea32a036d",
+  "ref": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793685358855_65fed246_1793685359192_a587b563.png"
+ },
+ "tiefgarage": {
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3IeQIYGph9rwir5I1EaapEuUzyZ/hf_20261103_055858_25f0c7f8-aa35-4e33-826e-ad682448f128.glb",
+  "job": "25f0c7f8-aa35-4e33-826e-ad682448f128",
+  "ref": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793685358487_164ec5b0_1793685358868_31f7ba88.png"
+ },
+ "kv_brunnen": {
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3IeQIYGph9rwir5I1EaapEuUzyZ/hf_20261103_055902_da368018-e053-4a51-89c0-df345602c570.glb",
+  "job": "da368018-e053-4a51-89c0-df345602c570",
+  "ref": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793685360255_4f9db8b9_1793685361042_0f459a60.png"
+ },
+ "kv_skulptur": {
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3IeQIYGph9rwir5I1EaapEuUzyZ/hf_20261103_055903_c6aa34a1-5b9e-4af0-8afa-6a8f5d75ca78.glb",
+  "job": "c6aa34a1-5b9e-4af0-8afa-6a8f5d75ca78",
+  "ref": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793685364278_d9285fe6_1793685364937_7c41945e.png"
+ },
+ "kv_wagen": {
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3IeQIYGph9rwir5I1EaapEuUzyZ/hf_20261103_055906_f3bcdbdd-d0da-4394-901b-4d5c01c7bf23.glb",
+  "job": "f3bcdbdd-d0da-4394-901b-4d5c01c7bf23",
+  "ref": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/wRD6PTxSzjxZwjWN69MC/image_1793685364045_16f63667_1793685364816_1d1fac2f.png"
+ }
+}

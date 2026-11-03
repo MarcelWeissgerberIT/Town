@@ -37,9 +37,11 @@ export class Furniture {
       const k = z * N + x;
       if (!w.road[k] || w.busstop[k]) continue;
       const mask = w.roadMask(x, z);
-      if (mask === 5) lamps.push(z % 2 ? [x + 0.1, z + 0.5] : [x + 0.9, z + 0.5]);
-      else if (mask === 10) lamps.push(x % 2 ? [x + 0.5, z + 0.1] : [x + 0.5, z + 0.9]);
-      else if (mask === 6 || mask === 3 || mask === 12 || mask === 9) lamps.push([x + (mask & 8 ? 0.9 : 0.1) * 1, z + (mask & 1 ? 0.9 : 0.1)]);
+      const o = w.road[k] === 2 ? 0.04 : 0.1;
+      if (w.junc[k] === 2 && w.isJunction(x, z)) { lamps.push([x + 0.065, z + 0.065], [x + 0.935, z + 0.935]); continue; }
+      if (mask === 5) lamps.push(z % 2 ? [x + o, z + 0.5] : [x + 1 - o, z + 0.5]);
+      else if (mask === 10) lamps.push(x % 2 ? [x + 0.5, z + o] : [x + 0.5, z + 1 - o]);
+      else if (mask === 6 || mask === 3 || mask === 12 || mask === 9) lamps.push([x + (mask & 8 ? 1 - o : o), z + (mask & 1 ? 1 - o : o)]);
     }
     for (const [x, z] of lamps) {
       if (n >= this.cap) break;

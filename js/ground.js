@@ -25,55 +25,90 @@ function grassTint(x, z) {
 
 function popcount(m) { return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1); }
 
-const S = [0, 0.2, 0.8, 1];
+const W1 = 0.2, W2 = 0.08; // sidewalk width of a street / a main road
+function popc(m) { return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1); }
+
+// raised sidewalk cell with kerb faces toward asphalt (or toward the lot at the tile edge)
+function sidewalkCell(B, x0, z0, x1, z1, sh, faces) {
+  B.rect('cobble', x0, z0, x1, z1, sh, SIDEWALK, 1.1);
+  const [n, s2, w, e] = faces;
+  if (n) B.quad('solid', [x1, n < 0 ? -0.01 : 0, z0], [x0, n < 0 ? -0.01 : 0, z0], [x0, sh, z0], [x1, sh, z0], CURB);
+  if (s2) B.quad('solid', [x0, s2 < 0 ? -0.01 : 0, z1], [x1, s2 < 0 ? -0.01 : 0, z1], [x1, sh, z1], [x0, sh, z1], CURB);
+  if (w) B.quad('solid', [x0, w < 0 ? -0.01 : 0, z0], [x0, w < 0 ? -0.01 : 0, z1], [x0, sh, z1], [x0, sh, z0], CURB);
+  if (e) B.quad('solid', [x1, e < 0 ? -0.01 : 0, z1], [x1, e < 0 ? -0.01 : 0, z0], [x1, sh, z0], [x1, sh, z1], CURB);
+}
+
 export function genRoad(B, world, x, z, onWater) {
   const m = world.roadMask(x, z);
-  const asph = (i, j) => (i === 1 && j === 1) || (i === 1 && j === 0 && (m & 1)) || (i === 2 && j === 1 && (m & 2)) || (i === 1 && j === 2 && (m & 4)) || (i === 0 && j === 1 && (m & 8));
-  const sh = 0.026;
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
-    const x0 = x + S[i], x1 = x + S[i + 1], z0 = z + S[j], z1 = z + S[j + 1];
-    if (asph(i, j)) {
-      B.rect('asphalt', x0, z0, x1, z1, 0.002, ASPH, 2.2);
-    } else {
-      B.rect('cobble', x0, z0, x1, z1, sh, SIDEWALK, 1.1);
-      // curb faces toward asphalt or open ground
-      if (j > 0 && asph(i, j - 1)) B.quad('solid', [x1, 0, z0], [x0, 0, z0], [x0, sh, z0], [x1, sh, z0], CURB);
-      if (j < 2 && asph(i, j + 1)) B.quad('solid', [x0, 0, z1], [x1, 0, z1], [x1, sh, z1], [x0, sh, z1], CURB);
-      if (i > 0 && asph(i - 1, j)) B.quad('solid', [x0, 0, z0], [x0, 0, z1], [x0, sh, z1], [x0, sh, z0], CURB);
-      if (i < 2 && asph(i + 1, j)) B.quad('solid', [x1, 0, z1], [x1, 0, z0], [x1, sh, z0], [x1, sh, z1], CURB);
-      // outer edges of the tile (toward lots)
-      if (j === 0 && !(m & 1)) B.quad('solid', [x1, -0.01, z0], [x0, -0.01, z0], [x0, sh, z0], [x1, sh, z0], CURB);
-      if (j === 2 && !(m & 4)) B.quad('solid', [x0, -0.01, z1], [x1, -0.01, z1], [x1, sh, z1], [x0, sh, z1], CURB);
-      if (i === 0 && !(m & 8)) B.quad('solid', [x0, -0.01, z0], [x0, -0.01, z1], [x0, sh, z1], [x0, sh, z0], CURB);
-      if (i === 2 && !(m & 2)) B.quad('solid', [x1, -0.01, z1], [x1, -0.01, z0], [x1, sh, z0], [x1, sh, z1], CURB);
-    }
+  const t = world.roadType(x, z) || 1;
+  const ctl = world.control(x, z);
+  const sh = 0.026, ym = 0.0045;
+  if (ctl === 2 && !onWater) { genRoundabout(B, world, x, z, m, t, sh); return; }
+  // arm widths: a main road narrows where it meets a street
+  const nbType = (d) => { const nx = x + DIRS[d].dx, nz = z + DIRS[d].dz; return world.inb(nx, nz) ? world.roadType(nx, nz) || t : 1; };
+  const lo = t === 2 ? W2 : W1;
+  const arm = [0, 1, 2, 3].map((d) => (Math.min(t, nbType(d)) === 2 ? W2 : W1));
+  const asph = (cx, cz) => {
+    if (cx > lo && cx < 1 - lo && cz > lo && cz < 1 - lo) return true;
+    if ((m & 1) && cz < 0.5 && cx > arm[0] && cx < 1 - arm[0]) return true;
+    if ((m & 4) && cz > 0.5 && cx > arm[2] && cx < 1 - arm[2]) return true;
+    if ((m & 8) && cx < 0.5 && cz > arm[3] && cz < 1 - arm[3]) return true;
+    if ((m & 2) && cx > 0.5 && cz > arm[1] && cz < 1 - arm[1]) return true;
+    return false;
+  };
+  const xs = [...new Set([0, lo, 1 - lo, ...arm.flatMap((a) => [a, 1 - a]), 1])].sort((a, b) => a - b);
+  for (let j = 0; j < xs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
+    const x0 = xs[i], x1 = xs[i + 1], z0 = xs[j], z1 = xs[j + 1];
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    if (asph(cx, cz)) { B.rect('asphalt', x + x0, z + z0, x + x1, z + z1, 0.002, ASPH, 2.2); continue; }
+    // kerb faces: 1 toward asphalt in this tile, -1 at the tile edge toward a lot
+    const L = xs.length - 2;
+    const fn = j === 0 ? ((m & 1) ? 0 : -1) : (asph(cx, z0 - 0.001) ? 1 : 0);
+    const fs = j === L ? ((m & 4) ? 0 : -1) : (asph(cx, z1 + 0.001) ? 1 : 0);
+    const fw = i === 0 ? ((m & 8) ? 0 : -1) : (asph(x0 - 0.001, cz) ? 1 : 0);
+    const fe = i === L ? ((m & 2) ? 0 : -1) : (asph(x1 + 0.001, cz) ? 1 : 0);
+    sidewalkCell(B, x + x0, z + z0, x + x1, z + z1, sh, [fn, fs, fw, fe]);
   }
-  const ym = 0.0045;
-  const n = popcount(m);
-  // centre dashes on straight pieces
+  const n = popc(m);
+  const wideBoth = (a, b) => arm[a] === W2 && arm[b] === W2;
+  // lane markings on straight pieces
   if (m === 5) {
-    for (const a of [0.08, 0.58]) B.rect('solid', x + 0.494, z + a, x + 0.506, z + a + 0.22, ym, MARK, 1);
+    if (wideBoth(0, 2)) {
+      B.rect('solid', x + 0.488, z, x + 0.496, z + 1, ym, MARK, 1); B.rect('solid', x + 0.504, z, x + 0.512, z + 1, ym, MARK, 1);
+      for (const a of [0.08, 0.58]) for (const o of [0.285, 0.715]) B.rect('solid', x + o - 0.005, z + a, x + o + 0.005, z + a + 0.2, ym, MARK, 1);
+    } else for (const a of [0.08, 0.58]) B.rect('solid', x + 0.494, z + a, x + 0.506, z + a + 0.22, ym, MARK, 1);
   } else if (m === 10) {
-    for (const a of [0.08, 0.58]) B.rect('solid', x + a, z + 0.494, x + a + 0.22, z + 0.506, ym, MARK, 1);
+    if (wideBoth(1, 3)) {
+      B.rect('solid', x, z + 0.488, x + 1, z + 0.496, ym, MARK, 1); B.rect('solid', x, z + 0.504, x + 1, z + 0.512, ym, MARK, 1);
+      for (const a of [0.08, 0.58]) for (const o of [0.285, 0.715]) B.rect('solid', x + a, z + o - 0.005, x + a + 0.2, z + o + 0.005, ym, MARK, 1);
+    } else for (const a of [0.08, 0.58]) B.rect('solid', x + a, z + 0.494, x + a + 0.22, z + 0.506, ym, MARK, 1);
   }
-  // zebra crossings next to junctions
+  // zebra crossings and stop or give-way lines next to junctions
   if (n === 2 && (m === 5 || m === 10)) {
     for (let d = 0; d < 4; d++) {
       if (!(m & DIRS[d].bit)) continue;
       const nx = x + DIRS[d].dx, nz = z + DIRS[d].dz;
-      if (!world.isRoad(nx, nz) || popcount(world.roadMask(nx, nz)) < 3) continue;
-      for (let k = 0; k < 6; k++) {
-        const a = 0.24 + k * 0.094;
-        if (d === 0) B.rect('solid', x + a, z + 0.03, x + a + 0.05, z + 0.17, ym, MARK, 1);
-        if (d === 2) B.rect('solid', x + a, z + 0.83, x + a + 0.05, z + 0.97, ym, MARK, 1);
-        if (d === 3) B.rect('solid', x + 0.03, z + a, x + 0.17, z + a + 0.05, ym, MARK, 1);
-        if (d === 1) B.rect('solid', x + 0.83, z + a, x + 0.97, z + a + 0.05, ym, MARK, 1);
+      if (!world.isJunction(nx, nz)) continue;
+      const nc = world.control(nx, nz);
+      const a0 = arm[d] + 0.04, a1 = 1 - arm[d] - 0.04;
+      const k = Math.max(4, Math.round((a1 - a0) / 0.094));
+      for (let i = 0; i < k; i++) {
+        const a = a0 + (a1 - a0) * i / k, b = a + (a1 - a0) / k * 0.53;
+        if (d === 0) B.rect('solid', x + a, z + 0.03, x + b, z + 0.17, ym, MARK, 1);
+        if (d === 2) B.rect('solid', x + a, z + 0.83, x + b, z + 0.97, ym, MARK, 1);
+        if (d === 3) B.rect('solid', x + 0.03, z + a, x + 0.17, z + b, ym, MARK, 1);
+        if (d === 1) B.rect('solid', x + 0.83, z + a, x + 0.97, z + b, ym, MARK, 1);
       }
-      // stop line
-      if (d === 0) B.rect('solid', x + 0.5, z + 0.19, x + 0.8, z + 0.21, ym, MARK, 1);
-      if (d === 2) B.rect('solid', x + 0.2, z + 0.79, x + 0.5, z + 0.81, ym, MARK, 1);
-      if (d === 3) B.rect('solid', x + 0.19, z + 0.2, x + 0.21, z + 0.5, ym, MARK, 1);
-      if (d === 1) B.rect('solid', x + 0.79, z + 0.5, x + 0.81, z + 0.8, ym, MARK, 1);
+      // the incoming half of the road: solid stop line at lights, dashed give-way line otherwise
+      const half = [[0.5, 1 - arm[d]], [0.5, 1 - arm[d]], [arm[d], 0.5], [arm[d], 0.5]][d];
+      const seg = (u0, u1) => {
+        if (d === 0) B.rect('solid', x + u0, z + 0.19, x + u1, z + 0.21, ym, MARK, 1);
+        if (d === 2) B.rect('solid', x + 1 - u1, z + 0.79, x + 1 - u0, z + 0.81, ym, MARK, 1);
+        if (d === 3) B.rect('solid', x + 0.19, z + 1 - u1, x + 0.21, z + 1 - u0, ym, MARK, 1);
+        if (d === 1) B.rect('solid', x + 0.79, z + u0, x + 0.81, z + u1, ym, MARK, 1);
+      };
+      if (nc === 1) seg(half[0], half[1]);
+      else for (let u = half[0]; u < half[1] - 0.01; u += 0.06) seg(u, Math.min(half[1], u + 0.035));
     }
   }
   if (onWater) {
@@ -102,7 +137,8 @@ export function genRoad(B, world, x, z, onWater) {
   if (bs) {
     const side = bs - 1; // 0 N,1 E,2 S,3 W sidewalk
     B.push(x + 0.5, z + 0.5, [Math.PI, Math.PI / 2, 0, -Math.PI / 2][side]);
-    // local: sidewalk at z in [0.3,0.5]
+    // local: sidewalk at z in [0.3,0.5]; main roads leave less room, so the shelter moves out
+    if ((world.roadType(x, z) || 1) === 2) B.push(0, 0.035);
     const gc = C('#9fc6d8'), fc = C('#3d4247');
     B.box('solid', -0.14, sh, 0.445, -0.13, sh + 0.13, 0.455, fc);
     B.box('solid', 0.13, sh, 0.445, 0.14, sh + 0.13, 0.455, fc);
@@ -113,7 +149,38 @@ export function genRoad(B, world, x, z, onWater) {
     B.cyl('solid', 0.2, sh + 0.15, 0.35, 0.022, 0.006, 10, C('#f2c230'));
     B.box('solid', 0.192, sh + 0.14, 0.346, 0.208, sh + 0.165, 0.354, C('#2e7d4f'));
     B.rect('solid', -0.2, 0.25, 0.2, 0.29, 0.0046, C('#f2c230'), 1);
+    if ((world.roadType(x, z) || 1) === 2) B.pop();
     B.pop();
+  }
+}
+
+// a roundabout: ring road around a planted island (a 3D model may stand on it)
+function genRoundabout(B, world, x, z, m, t, sh) {
+  const c = 0.13; // corner sidewalks
+  B.rect('asphalt', x, z, x + 1, z + 1, 0.002, ASPH, 2.2);
+  const corners = [[0, 0], [1 - c, 0], [0, 1 - c], [1 - c, 1 - c]];
+  for (const [ox, oz] of corners) {
+    const n = oz === 0 ? -1 : 1, s2 = oz === 0 ? 1 : -1, w = ox === 0 ? -1 : 1, e = ox === 0 ? 1 : -1;
+    sidewalkCell(B, x + ox, z + oz, x + ox + c, z + oz + c, sh, [n, s2, w, e]);
+  }
+  // a narrow sidewalk where no street joins
+  if (!(m & 1)) sidewalkCell(B, x + c, z, x + 1 - c, z + 0.04, sh, [-1, 1, 0, 0]);
+  if (!(m & 4)) sidewalkCell(B, x + c, z + 0.96, x + 1 - c, z + 1, sh, [1, -1, 0, 0]);
+  if (!(m & 8)) sidewalkCell(B, x, z + c, x + 0.04, z + 1 - c, sh, [0, 0, -1, 1]);
+  if (!(m & 2)) sidewalkCell(B, x + 0.96, z + c, x + 1, z + 1 - c, sh, [0, 0, 1, -1]);
+  const cx = x + 0.5, cz = z + 0.5;
+  // cobbled truck apron, kerb and lawn
+  B.cyl('cobble', cx, 0, cz, 0.215, 0.012, 24, QUAY);
+  B.cyl('solid', cx, 0, cz, 0.175, 0.03, 24, CURB, { top: C('#9aa080') });
+  B.cyl('grass', cx, 0.03, cz, 0.165, 0.001, 24, C('#dfe8cf'));
+  // give-way markings where the streets enter the ring
+  for (let d = 0; d < 4; d++) {
+    if (!(m & DIRS[d].bit)) continue;
+    const dir = DIRS[d], r = [-dir.dz, dir.dx];
+    for (let u = 0.03; u < 0.28; u += 0.06) {
+      const px = cx + dir.dx * 0.43 - r[0] * (u + 0.02), pz = cz + dir.dz * 0.43 - r[1] * (u + 0.02);
+      B.rect('solid', px - 0.012, pz - 0.012, px + 0.012, pz + 0.012, 0.0045, MARK, 1);
+    }
   }
 }
 

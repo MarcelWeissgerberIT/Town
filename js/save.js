@@ -26,9 +26,9 @@ export class SaveSystem {
     const w = game.world;
     const pol = sim.pollution.pack();
     return {
-      v: 2,
+      v: 3,
       world: {
-        terrain: b64(w.terrain), road: b64(w.road), zone: b64(w.zone), trees: b64(w.trees), busstop: b64(w.busstop), pline: b64(w.pline),
+        terrain: b64(w.terrain), road: b64(w.road), zone: b64(w.zone), trees: b64(w.trees), busstop: b64(w.busstop), pline: b64(w.pline), junc: b64(w.junc),
         nextId: w.nextId, centre: w.centre, seed: w.seed, type: w.ttype || 'river', flowOut: w.flowOut,
       },
       pollution: { air: b64(pol.air), ground: b64(pol.ground), water: b64(pol.water) },

@@ -32,6 +32,7 @@ export const VIEWS = {
   health: { name: 'Gesundheit', icon: 'i-cross', legend: [['#3fbf5f', 'Ärzte erreichbar'], ['#e03b2a', 'keine Ärzte'], ['#b03ab0', 'viele Kranke']] },
   safety: { name: 'Sicherheit', icon: 'i-shield', legend: [['#3b8fd9', 'Polizei'], ['#e0602a', 'Feuerwehr'], ['#8a5cc2', 'beides'], ['#bbbbbb', 'nichts']] },
   edu: { name: 'Bildung', icon: 'i-book', legend: [['#3fbf5f', 'Schule erreichbar'], ['#e03b2a', 'keine Schule']] },
+  traffic: { name: 'Verkehr', icon: 'i-lights', legend: [['#5be07a', 'frei'], ['#f2c230', 'viel Verkehr'], ['#ff4a3a', 'Stau'], ['#4ea7ec', 'Ampel'], ['#b07cff', 'Kreisverkehr'], ['#ffffff', 'Parken']] },
   lv: { name: 'Bodenwert', icon: 'i-coin', legend: [['#c9d1c4', 'niedrig'], ['#7bbf6a', 'mittel'], ['#1f7a3a', 'hoch']] },
 };
 
@@ -72,7 +73,7 @@ export class Heatmap {
     d.fill(0);
     const pol = sim.pollution, util = sim.util;
     // building views: dim the map so the coloured buildings stand out
-    if (mode === 'power' || mode === 'water' || mode === 'garbage' || mode === 'mood') {
+    if (mode === 'power' || mode === 'water' || mode === 'garbage' || mode === 'mood' || mode === 'traffic') {
       const dim = hex('#18202a');
       for (let k = 0; k < N * N; k++) if (!w.terrain[k]) put(k, dim, 0.55);
     }
@@ -116,6 +117,20 @@ export class Heatmap {
       }
       if (!c) continue;
       for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) put(w.idx(b.x + i, b.z + j), c, a);
+    }
+    if (mode === 'traffic') {
+      const tr = sim.game.traffic;
+      for (let k = 0; k < N * N; k++) {
+        if (!w.road[k]) continue;
+        const f = tr ? tr.flow[k] : 0, j = tr ? tr.jam[k] : 0;
+        let c = ramp([[0, hex('#5be07a')], [0.5, hex('#f2c230')], [1, hex('#ff4a3a')]], Math.max(f / 30, j / 4));
+        const x = k % N, z = (k / N) | 0;
+        const ctl = w.control(x, z);
+        if (ctl === 1 && j < 2) c = hex('#4ea7ec');
+        if (ctl === 2 && j < 2) c = hex('#b07cff');
+        put(k, c, 0.9);
+      }
+      for (const b of w.buildings.values()) if (SERVICES[b.type]?.park && b.state === 'done') for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) put(w.idx(b.x + i, b.z + j), hex('#ffffff'), 0.9);
     }
     if (mode === 'power') {
       for (let k = 0; k < N * N; k++) {

@@ -64,6 +64,15 @@ nur ein wenig und teuer. Wer wachsen will, muss planen:
   weitere Städte, wechsle zwischen ihnen und schließe Lieferverträge für Strom und Wasser mit Nachbarn
   (Leitung bzw. Straße bis zum gemeinsamen Kartenrand).
 
+**Verkehr:** Straßen mit zwei Spuren und **Hauptstraßen mit vier Spuren** (Autos wählen die Spur
+nach ihrem Abbiegeziel und überholen), **Ampeln** als Werkzeug (an Kreuzungen ohne Ampel gilt rechts
+vor links, Hauptstraßen haben Vorfahrt), **Kreisverkehre** mit Vorfahrt für den Ring, Stau-Anzeige und
+eine Verkehrsansicht. Routen bevorzugen Hauptstraßen. **Parken:** Parkplatz, Tiefgarage und Parkhaus;
+Wohnungen, Geschäfte und Büros brauchen Stellplätze in der Nähe (am Straßenrand gibt es ein paar),
+sonst sinkt die Zufriedenheit, Kaufhäuser und Hochhäuser entstehen erst mit genug Parkplätzen und es
+gibt Parksuchverkehr. Autos fahren in Parkhäuser und Tiefgaragen ein, auf Parkplätzen stehen sie –
+tagsüber mehr als nachts.
+
 Ältere Spielstände werden übernommen: Der Landkreis liefert dann noch 24 Tage lang zusätzlich Strom,
 Wasser und Müllabfuhr, damit Zeit für eigene Werke bleibt.
 
@@ -81,7 +90,7 @@ das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 | Karte verschieben | Linke Maustaste ziehen (Werkzeug „Ansehen“), WASD, Pfeiltasten | 1 Finger ziehen |
 | Zoomen | Mausrad, `+` / `−` | 2 Finger spreizen |
 | Drehen | Rechte Maustaste ziehen, `Q` / `E` | 2 Finger drehen |
-| Werkzeuge | `1`–`0`, `N` Natur, `B` Bus, `X` Abriss | Werkzeugleiste unten |
+| Werkzeuge | `1`–`0`, `N` Natur, `B` Verkehr, `X` Abriss | Werkzeugleiste unten |
 | Ansichten · Haushalt · Region | `V` · `H` · `M` | Knöpfe rechts über der Versorgung |
 | Gebäude drehen beim Platzieren | `R` | – |
 | Pause | Leertaste | Pause-Knopf |
@@ -129,6 +138,14 @@ Abwassernetze, `js/waste.js` die Müllabfuhr, `js/safety.js` Krankheit, Notrufe,
 `js/houses.js` enthält den Wohnhauskatalog (Stile, Farbpalette, Dachformen, Gauben,
 Gärten), `js/commerce.js` den Gewerbekatalog bis zum Wolkenkratzer, `js/vehicles.js` die
 Fahrzeugmodelle samt prozeduralem Lackier-Atlas, `js/buildgen.js` die übrigen Gebäude.
+
+## 3D-Modelle
+
+Parkhaus, Tiefgarageneinfahrt und drei Kreisverkehr-Inseln (Brunnen mit Pferd, Edelstahlskulptur,
+Blumenwagen) sind 3D-Modelle aus **Meshy** (Image-to-3D über Higgsfield). Die Vorlagebilder stammen
+aus OpenArt. `tools/process_models.py` verkleinert die Texturen; Quellen in `tools/model_sources.json`.
+Das Spiel liest die GLB-Dateien mit einem kleinen eigenen Lader (`js/models3d.js`) und zeichnet sie
+instanziert. Fehlen die Dateien, werden die Gebäude prozedural gebaut.
 
 ## Assets
 
@@ -179,12 +196,14 @@ js/markers.js       Problem-Symbole, Müllsäcke, Rotoren
 js/heatmap.js       Kartenansichten mit Legenden
 js/terrain.js       Landschaftstypen der Region
 js/region.js        Region, Stadtgründung, Lieferverträge
+js/parking.js       Stellplatzbedarf und -angebot
+js/models3d.js      GLB-Lader und Modell-Ebene (Meshy-Modelle)
 js/vehicles.js      Fahrzeugmodelle und Lackier-Atlas
 js/models.js        Menschen, Bäume, Fahrräder, Traktor, Kleinkram
 js/ground.js        Gelände, Straßen, Brücken, Ufer, Umland mit Feldern
 js/chunks.js        Zusammenfassen der Geometrie in Kartenblöcke
 js/construction.js  Baustellen mit Gerüst, Kran und Bagger
-js/traffic.js       Verkehr, Ampeln, Busse, Einsatzfahrzeuge
+js/traffic.js       Verkehr: Spuren, Ampeln, Vorfahrt, Kreisverkehr, Busse, Einsatzfahrzeuge, Parken
 js/people.js        Fußgänger, Hunde, Bauarbeiter, Tauben
 js/sim.js           Nachfrage, Wachstum, Zufriedenheit, Bodenwert, Haushalt
 js/env.js           Sonne, Tag/Nacht, Schatten

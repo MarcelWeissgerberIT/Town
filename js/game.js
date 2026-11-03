@@ -55,6 +55,9 @@ export class Game {
     b.anchor = meta.anchor ? (() => { const p = W([meta.anchor[0], meta.anchor[1]]); return [p[0], meta.anchor[2], p[1]]; })() : null;
     b.splash = meta.splash ? W(meta.splash) : null;
     b.fillLevel = meta.fillLevel;
+    b.model = meta.model ? (() => { const p = W([meta.model.x, meta.model.z]); return { name: meta.model.name, x: p[0], z: p[1], y: meta.model.y || 0, a: t.a + (meta.model.yaw || 0), fit: meta.model.fit }; })() : null;
+    // parking bays: world position and the direction the parked car points to
+    b.bays = meta.bays ? meta.bays.map((q) => { const p = W([q[0], q[1]]); return [p[0], p[1], q[2] * B.cs + q[3] * B.sn, -q[2] * B.sn + q[3] * B.cs]; }) : null;
     b.height = meta.height;
     b.shell = meta.shell;
     b.flags = { wander: !!meta.wander, kids: !!meta.kids, pigeons: !!meta.pigeons, station: meta.station || null };

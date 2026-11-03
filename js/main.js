@@ -16,6 +16,7 @@ import { Overlay } from './overlay.js';
 import { PowerLines } from './powerlines.js';
 import { Markers } from './markers.js';
 import { Heatmap } from './heatmap.js';
+import { loadModels, ModelLayer } from './models3d.js';
 import { U as UNI } from './materials.js';
 import { UI } from './ui.js';
 import { SaveSystem, unb64 } from './save.js';
@@ -59,7 +60,8 @@ async function boot(hotData) {
 
   const scene = new THREE.Scene();
   scene.environment = makeEnvironment(renderer);
-  const T = await loadTextures(Q);
+  // textures and the Meshy models load side by side; the game also runs without models
+  const [T] = await Promise.all([loadTextures(Q), Q.procedural ? null : Promise.race([loadModels(), new Promise((r) => setTimeout(r, 12000))])]);
   initBuildgen(T.atlas);
   setPhotoMode(T.photo); setGroundPhoto(T.photo);
   const M = makeMaterials(T);
@@ -79,6 +81,7 @@ async function boot(hotData) {
   const powerLines = new PowerLines(scene, game, M);
   const markers = new Markers(scene, game, sim, M);
   const heatmap = new Heatmap(scene, game.world);
+  const models = new ModelLayer(scene, game);
   // river pollution as a texture for the water shader
   const polData = new Uint8Array(MAP_N * MAP_N * 4);
   const polTex = new THREE.DataTexture(polData, MAP_N, MAP_N, THREE.RGBAFormat);
@@ -124,6 +127,9 @@ async function boot(hotData) {
       w.terrain.set(unb64(st.world.terrain)); w.road.set(unb64(st.world.road)); w.zone.set(unb64(st.world.zone));
       w.trees.set(unb64(st.world.trees)); w.busstop.set(unb64(st.world.busstop));
       if (st.world.pline) w.pline.set(unb64(st.world.pline)); else w.pline.fill(0);
+      // towns from before junction control keep traffic lights at every junction
+      if (st.world.junc) w.junc.set(unb64(st.world.junc));
+      else { w.junc.fill(0); for (let z = 0; z < w.N; z++) for (let x = 0; x < w.N; x++) if (w.isJunction(x, z)) w.junc[w.idx(x, z)] = 1; }
       w.lineVersion++;
       w.nextId = st.world.nextId; w.centre = st.world.centre;
       for (const o of st.buildings) {
@@ -146,7 +152,7 @@ async function boot(hotData) {
       w.seed = opts.seed ?? 20261013;
       w.ttype = opts.type || 'river';
       w.flowOut = terrainOf(w.ttype).flowOut;
-      w.terrain.fill(0); w.road.fill(0); w.zone.fill(0); w.trees.fill(0); w.busstop.fill(0); w.pline.fill(0); w.nextId = 1;
+      w.terrain.fill(0); w.road.fill(0); w.zone.fill(0); w.trees.fill(0); w.busstop.fill(0); w.pline.fill(0); w.junc.fill(0); w.nextId = 1;
       w.lineVersion++;
       w.genTerrain();
       game.startNew();
@@ -289,6 +295,7 @@ async function boot(hotData) {
     fx.update(simDt, view.ppu * renderer.getPixelRatio());
     furniture.update(buildVersion);
     powerLines.update();
+    models.update(view);
     markers.update(dt, view, renderer.getPixelRatio());
     heatmap.update(dt, sim);
     updatePolTex();

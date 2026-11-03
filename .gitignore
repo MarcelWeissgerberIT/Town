@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 tools/raw/
 tools/__pycache__/
+tools/raw_glb/

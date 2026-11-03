@@ -13,7 +13,8 @@ export class World {
     this.terrainVersion = 0;
     const n = this.N * this.N;
     this.terrain = new Uint8Array(n);   // 0 land, 1 water
-    this.road = new Uint8Array(n);
+    this.road = new Uint8Array(n);      // 0 none, 1 street (2 lanes), 2 main road (4 lanes)
+    this.junc = new Uint8Array(n);      // junction control: 0 none (give way), 1 traffic lights, 2 roundabout
     this.zone = new Uint8Array(n);
     this.bld = new Int32Array(n).fill(-1);
     this.trees = new Uint8Array(n);     // wild trees on a tile (0..3)
@@ -30,7 +31,20 @@ export class World {
   idx(x, z) { return z * this.N + x; }
   inb(x, z) { return x >= 0 && z >= 0 && x < this.N && z < this.N; }
   isWater(x, z) { return this.inb(x, z) ? this.terrain[this.idx(x, z)] === 1 : this.outerWater(x, z); }
-  isRoad(x, z) { return this.inb(x, z) && this.road[this.idx(x, z)] === 1; }
+  isRoad(x, z) { return this.inb(x, z) && this.road[this.idx(x, z)] > 0; }
+  roadType(x, z) { return this.inb(x, z) ? this.road[this.idx(x, z)] : 0; }
+  // a road tile where three or four streets meet
+  isJunction(x, z) {
+    if (!this.isRoad(x, z)) return false;
+    const m = this.roadMask(x, z);
+    return ((m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1)) >= 3;
+  }
+  // how a junction is controlled (0 give way, 1 lights, 2 roundabout); -1: no junction
+  control(x, z) {
+    if (!this.isJunction(x, z)) return -1;
+    const j = this.junc[this.idx(x, z)];
+    return j === 2 && this.terrain[this.idx(x, z)] ? 0 : j;
+  }
   roadMask(x, z) {
     let m = 0;
     for (let d = 0; d < 4; d++) {
@@ -53,6 +67,12 @@ export class World {
 
   genTerrain() { genTerrain(this, this.ttype, this.seed); }
 
+  setJunction(x, z, kind) {
+    this.junc[this.idx(x, z)] = kind;
+    this.version++;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.inb(x + dx, z + dz)) this.markDirty(x + dx, z + dz);
+  }
+
   setLine(x, z, on) {
     const i = this.idx(x, z);
     this.pline[i] = on ? 1 : 0;
@@ -61,11 +81,11 @@ export class World {
     this.markDirty(x, z);
   }
 
-  setRoad(x, z, on) {
+  setRoad(x, z, on, type = 1) {
     const i = this.idx(x, z);
-    this.road[i] = on ? 1 : 0;
+    this.road[i] = on ? type : 0;
     if (on) { this.zone[i] = 0; this.trees[i] = 0; }
-    else this.busstop[i] = 0;
+    else { this.busstop[i] = 0; this.junc[i] = 0; }
     this.version++;
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.inb(x + dx, z + dz)) this.markDirty(x + dx, z + dz);
   }
@@ -155,6 +175,7 @@ export class World {
       b.state = 'done'; b.progress = 1;
       return this.addBuilding(b);
     };
+    if (this.isJunction(cx, cz)) this.junc[this.idx(cx, cz)] = 2;
     place('plaza', cx + 1, cz - 1, 1, 1, 2);
     place('playground', cx + 1, cz + 1, 1, 1, 0);
     place('church', cx + 3, cz - 4, 1, 2, 0);

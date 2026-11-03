@@ -22,10 +22,16 @@ const TOOLS = [
   { id: 'care', label: 'Dienste', icon: 'i-cross', key: '9', view: 'health', menu: ['firestation', 'police', 'clinic', 'rescue', 'hospital'] },
   { id: 'culture', label: 'Kultur', icon: 'i-civic', key: '0', view: 'edu', menu: ['school', 'townhall', 'church', 'stadium', 'tvtower'] },
   { id: 'nature', label: 'Natur', icon: 'i-tree', key: 'n', view: 'air', menu: ['tree', 'park', 'playground', 'plaza'] },
-  { id: 'busstop', label: 'Bus', icon: 'i-bus', key: 'b', hint: 'Auf ein <b>gerades Straßenstück</b> klicken · 250 €. Ab zwei Haltestellen fährt ein Bus.' },
+  { id: 'traffic', label: 'Verkehr', icon: 'i-lights', key: 'b', view: 'traffic', menu: ['avenue', 'lights', 'roundabout', 'busstop', 'parking', 'garage', 'parkhaus'] },
   { sep: true },
   { id: 'bulldoze', label: 'Abriss', icon: 'i-bulldoze', key: 'x', color: 'var(--bad)', hint: '<b>Fläche aufziehen</b>, um Straßen, Leitungen, Gebäude, Zonen und Bäume zu entfernen.' },
 ];
+const TRAFFIC_TOOLS = {
+  avenue: { name: 'Hauptstraße', sub: `${COSTS.avenue} € pro Feld`, stat: '4 Spuren', hint: '<b>Ziehen</b>, um eine Hauptstraße mit vier Spuren zu bauen oder eine Straße auszubauen · 70 € pro Feld. Schneller und mehr Platz, aber lauter.' },
+  lights: { name: 'Ampel', sub: `${COSTS.lights} € pro Kreuzung`, stat: 'regelt den Verkehr', hint: '<b>Auf eine Kreuzung klicken</b>, um eine Ampel zu bauen (nochmal klicken: entfernen) · 600 €. Ohne Ampel gilt rechts vor links, Hauptstraßen haben Vorfahrt.' },
+  roundabout: { name: 'Kreisverkehr', sub: `${COSTS.roundabout} € pro Kreuzung`, stat: 'ohne Wartezeit', hint: '<b>Auf eine Kreuzung klicken</b>, um einen Kreisverkehr zu bauen (nochmal klicken: entfernen) · 900 €. Wer im Kreis fährt, hat Vorfahrt.' },
+  busstop: { name: 'Bushaltestelle', sub: `${COSTS.busstop} €`, stat: 'ab zwei fährt ein Bus', hint: 'Auf ein <b>gerades Straßenstück</b> klicken · 250 €. Ab zwei Haltestellen fährt ein Bus.' },
+};
 const LINE_HINT = '<b>Ziehen</b>, um eine Hochspannungsleitung zu bauen · 30 € pro Feld. Verbinde Kraftwerke mit einem <b>Umspannwerk</b> an der Straße.';
 const VIEW_NOTES = {
   power: 'Grüne Straßen haben noch Strom übrig, rote nicht. Großkraftwerke brauchen eine Leitung zu einem Umspannwerk.',
@@ -40,6 +46,7 @@ const VIEW_NOTES = {
   safety: 'Polizei und Feuerwehr schützen ihren Umkreis.',
   edu: 'Schulen machen Familien glücklich; spätere Industrie braucht Bildung.',
   lv: 'Hoher Bodenwert lässt größere Häuser entstehen.',
+  traffic: 'Rot: Stau. Ampeln und Kreisverkehre lösen Kreuzungen, Hauptstraßen haben vier Spuren und Vorfahrt.',
 };
 const KIND_NAME = { res: 'Wohnen', com: 'Gewerbe', ind: 'Industrie', svc: 'Öffentlich' };
 const COVER_NAMES = { fire: 'Feuerwehr', police: 'Polizei', health: 'Gesundheit', edu: 'Bildung' };
@@ -125,7 +132,7 @@ export class UI {
     for (const b of document.querySelectorAll('.tool')) {
       const t = TOOLS.find((x) => x.id === b.dataset.tool);
       let on = t.id === this.tool;
-      if (t.menu && ((this.tool === 'place' && t.menu.includes(this.placeType)) || (this.tool === 'line' && t.id === 'power') || (this.tool === 'tree' && t.id === 'nature'))) on = true;
+      if (t.menu && ((this.tool === 'place' && t.menu.includes(this.placeType)) || (this.tool === 'line' && t.id === 'power') || (this.tool === 'tree' && t.id === 'nature') || (TRAFFIC_TOOLS[this.tool] && t.id === 'traffic'))) on = true;
       b.classList.toggle('on', on);
     }
   }
@@ -158,6 +165,7 @@ export class UI {
     if (S.waste) return `${S.waste.trucks} Müllwagen`;
     if (S.care?.beds) return `${S.care.beds} Betten`;
     if (S.care?.ambulances) return `${S.care.ambulances} Rettungswagen`;
+    if (S.park) return `${S.park} Stellplätze`;
     if (S.radius) return `Umkreis ${S.radius}`;
     return '';
   }
@@ -173,6 +181,10 @@ export class UI {
       if (k === 'tree') {
         b.innerHTML = `<b>Bäume pflanzen</b><span>${COSTS.tree} € pro Baum</span><span class="stat2">filtern die Luft</span>`;
         b.onclick = () => { fly.hidden = true; this.tool = 'tree'; this.placeType = 'tree'; this.refreshToolbar(); this.setHint('<b>Klicken oder ziehen</b>, um Bäume zu pflanzen · 15 € pro Baum'); };
+      } else if (TRAFFIC_TOOLS[k]) {
+        const T = TRAFFIC_TOOLS[k];
+        b.innerHTML = `<b>${T.name}</b><span>${T.sub}</span><span class="stat2">${T.stat}</span>`;
+        b.onclick = () => { fly.hidden = true; this.tool = k; this.placeType = null; this.refreshToolbar(); this.setHint(T.hint); this.showView('traffic', true); };
       } else if (k === 'line') {
         b.innerHTML = `<b>Stromleitung</b><span>${COSTS.line} € pro Feld</span><span class="stat2">Hochspannung</span>`;
         b.title = 'Verbindet Kraftwerke, Umspannwerke und das Umland.';
@@ -387,17 +399,20 @@ export class UI {
     const w = this.game.world;
     const ov = this.overlay;
     if (!t) { ov.clear(); return; }
-    if (this.tool === 'road') {
+    if (this.tool === 'road' || this.tool === 'avenue') {
+      const type = this.tool === 'avenue' ? 2 : 1;
       const path = d ? this.lpath(d.start, d.cur) : [t];
       ov.set(path.map(([x, z]) => {
         const blocked = !w.inb(x, z) || w.buildingAt(x, z);
-        const c = blocked ? '#ef6a52' : w.isRoad(x, z) ? '#9aa4ad' : w.isWater(x, z) ? '#7fc4ff' : '#f2c230';
+        const c = blocked ? '#ef6a52' : w.roadType(x, z) >= type ? '#9aa4ad' : w.isWater(x, z) ? '#7fc4ff' : type === 2 ? '#ff9f43' : '#f2c230';
         return [x, z, 0.06, c];
       }));
       if (d) {
-        let cost = 0; for (const [x, z] of path) if (w.inb(x, z) && !w.isRoad(x, z) && !w.buildingAt(x, z)) cost += w.isWater(x, z) ? COSTS.bridge : COSTS.road;
-        this.setHint(`Straße: <b>${path.length}</b> Felder · <b>${fmtMoney(cost)}</b>`);
+        const rc = this.sim.roadCost(path, type);
+        this.setHint(`${type === 2 ? 'Hauptstraße' : 'Straße'}: <b>${rc.tiles.length}</b> Felder · <b>${fmtMoney(rc.cost)}</b>`);
       }
+    } else if (this.tool === 'lights' || this.tool === 'roundabout') {
+      ov.set([[t[0], t[1], 0.07, w.isJunction(t[0], t[1]) ? '#7bd389' : '#ef6a52']]);
     } else if (this.tool === 'line') {
       const path = d ? this.lpath(d.start, d.cur) : [t];
       ov.set(path.map(([x, z]) => {
@@ -434,11 +449,16 @@ export class UI {
   toolApply(d) {
     const t = d.cur;
     const sim = this.sim;
-    if (this.tool === 'road') {
-      const r = sim.buildRoad(this.lpath(d.start, d.cur));
+    if (this.tool === 'road' || this.tool === 'avenue') {
+      const r = sim.buildRoad(this.lpath(d.start, d.cur), this.tool === 'avenue' ? 2 : 1);
       if (!r.ok) this.toast(r.msg, 'i-road', 'var(--bad)');
       else this.audio?.play('build');
-      this.setHint(TOOLS[1].hint);
+      this.setHint(this.tool === 'avenue' ? TRAFFIC_TOOLS.avenue.hint : TOOLS[1].hint);
+    } else if ((this.tool === 'lights' || this.tool === 'roundabout') && t) {
+      const kind = this.tool === 'lights' ? 1 : 2;
+      const r = sim.setJunction(t[0], t[1], kind);
+      if (!r.ok) this.toast(r.msg, 'i-lights', 'var(--bad)');
+      else { this.audio?.play('build'); this.toast(r.removed ? `${kind === 1 ? 'Ampel' : 'Kreisverkehr'} entfernt – hier gilt wieder rechts vor links.` : kind === 1 ? 'Ampel gebaut.' : 'Kreisverkehr gebaut.', 'i-lights'); }
     } else if (this.tool === 'line') {
       const r = sim.buildLine(this.lpath(d.start, d.cur));
       if (!r.ok) this.toast(r.msg, 'i-pylon', 'var(--bad)');
@@ -556,8 +576,16 @@ export class UI {
     } else if (s.type === 'tile') {
       const [x, z] = s.ref; const k = w.idx(x, z);
       const zn = w.zone[k];
-      const what = w.terrain[k] ? 'Fluss' : w.road[k] ? (w.busstop[k] ? 'Straße mit Bushaltestelle' : 'Straße') : zn ? ZONE_INFO[zn].name : w.trees[k] ? 'Wald' : 'Wiese';
+      const ctl = w.control(x, z);
+      const rname = w.road[k] === 2 ? 'Hauptstraße' : 'Straße';
+      const what = w.terrain[k] && !w.road[k] ? 'Fluss' : w.road[k] ? (ctl === 1 ? `${rname}: Ampelkreuzung` : ctl === 2 ? 'Kreisverkehr' : ctl === 0 ? `${rname}: Kreuzung` : w.busstop[k] ? `${rname} mit Bushaltestelle` : w.terrain[k] ? `${rname} (Brücke)` : rname) : zn ? ZONE_INFO[zn].name : w.trees[k] ? 'Wald' : 'Wiese';
       html += `<h2>${what}</h2><div class="kind">Feld ${x} / ${z}</div><dl class="kv"><dt>Bodenwert</dt><dd>${Math.round(this.sim.lv[k])} / 100</dd>`;
+      if (w.road[k]) {
+        const f = this.traffic.flow[k];
+        html += `<dt>Spuren</dt><dd>${w.road[k] === 2 ? 4 : 2}</dd><dt>Verkehr</dt><dd>${f < 5 ? 'wenig' : f < 15 ? 'mittel' : f < 30 ? 'viel' : 'sehr viel'}</dd>`;
+        if (ctl === 0) html += `<dt>Vorfahrt</dt><dd>${w.road[k] === 2 ? 'Hauptstraße zuerst' : 'rechts vor links'}</dd>`;
+        if (this.traffic.jam[k] > 1.5) html += `<dt>Stau</dt><dd style="color:var(--bad)">${Math.round(this.traffic.jam[k])} warten</dd>`;
+      }
       if (zn && !w.road[k]) html += `<dt>Straße angrenzend</dt><dd>${w.facingFor(x, z, 1, 1) >= 0 ? 'ja' : 'nein – hier wird nicht gebaut'}</dd><dt>Nachfrage</dt><dd>${Math.round(this.sim.demand[ZONE_KEYS[zn]] * 100)} %</dd>`;
       html += '</dl><div class="chips">';
       for (const c in COVER_NAMES) html += `<span class="svc ${this.sim.cover[c][k] ? 'ok' : ''}">${COVER_NAMES[c]}</span>`;
@@ -590,6 +618,7 @@ export class UI {
     if (done && (b.wUse > 0 || (b.kind !== 'svc'))) h += `<dt>Wasser</dt><dd>${yes(b.wt !== 0)}</dd>`;
     if (done && b.kind !== 'svc') { const g = garbageDays(b); h += `<dt>Mülltonnen</dt><dd>${g < 1 ? 'leer' : g < 3 ? `${Math.round(g)} Tage voll` : `<span style="color:var(--bad)">${Math.round(g)} Tage – stinkt!</span>`}</dd>`; }
     if (b.kind === 'res' && b.sick) h += `<dt>Krank</dt><dd>${b.sick}</dd>`;
+    if (done && b.kind !== 'svc' && b.park !== undefined && b.park < 1) h += `<dt>Parkplätze</dt><dd>${b.park > 0.9 ? 'genug' : `<span style="color:${b.park < 0.5 ? 'var(--bad)' : 'var(--accent)'}">${Math.round(b.park * 100)} % gedeckt</span>`}</dd>`;
     if (b.kind !== 'svc') h += `<dt>Bodenwert</dt><dd>${Math.round(sim.lv[k])} / 100</dd>`;
     // facility details
     if (S && done) {
@@ -609,6 +638,7 @@ export class UI {
         if (S.waste.burn) h += `<dt>Bunker</dt><dd>${Math.round(b.bunker || 0)} / ${S.waste.cap} t</dd>`;
       }
       if (S.care?.ambulances) h += `<dt>Rettungswagen</dt><dd>${this.traffic.count((v) => v.type === 'ambulance' && v.data.station === b.id)} / ${S.care.ambulances} im Einsatz</dd>`;
+      if (S.park) h += `<dt>Stellplätze</dt><dd>${S.park}</dd><dt>Belegt</dt><dd>${Math.round((b.occ || 0) * 100)} %</dd>`;
       if (S.care?.beds) h += `<dt>Betten belegt</dt><dd>${(b.patients || []).length} / ${S.care.beds}</dd>`;
       if (S.upkeep) h += `<dt>Unterhalt</dt><dd>${fmtMoney(S.upkeep * sim.diff.upkeep)}/Tag</dd>`;
       if (S.radius && S.cover) h += `<dt>Reichweite</dt><dd>${S.radius} Felder</dd>`;
@@ -647,6 +677,7 @@ export class UI {
         if (sim.lv[k] < next.lv) miss.push(`Bodenwert ${next.lv}`);
         for (const n of next.need) if (!sim.cover[n][k]) miss.push(COVER_NAMES[n]);
         if ((b.mood ?? 60) < 55) miss.push('zufriedene Bewohner');
+        if (next.parking && (b.park ?? 1) < 0.5) miss.push('Parkplätze in der Nähe');
         if (next.size === 2) miss.push('2×2 Fläche derselben Zone');
         h += `<p class="fine">Nächste Stufe: <b>${next.name}</b>${miss.length ? ` – braucht ${miss.join(', ')}` : ' – bereit, wenn Nachfrage, Strom und Wasser reichen'}.</p>`;
       }
@@ -785,6 +816,16 @@ export class UI {
     if (s.safety.stats.waiting) out.push({ k: 'sos', sev: 8, ic: 'i-cross', t: `${s.safety.stats.waiting} Notruf(e) warten auf einen Rettungswagen. Baue eine Rettungswache.` });
     if (s.money < 0) out.push({ k: 'money', sev: 9, ic: 'i-coin', t: 'Die Stadtkasse ist leer! Steuern erhöhen, sparen oder einen Kredit aufnehmen.' });
     else if (s.incomePerDay < s.upkeepPerDay && s.money < 8000) out.push({ k: 'money', sev: 6, ic: 'i-coin', t: 'Die Stadt gibt mehr aus, als sie einnimmt.' });
+    let noPark = 0;
+    for (const b of facs) if (b.kind === 'com' && b.park !== undefined && b.park < 0.5 && b.level >= 2) noPark++;
+    if (noPark > 2) out.push({ k: 'parking', sev: 4, ic: 'i-parking', t: `${noPark} Geschäfte haben zu wenig Kundenparkplätze. Baue Parkplätze, eine Tiefgarage oder ein Parkhaus.` });
+    const tr = this.traffic;
+    let jk = -1, jv = 0;
+    for (let k = 0; k < tr.jam.length; k++) if (tr.jam[k] > jv) { jv = tr.jam[k]; jk = k; }
+    if (jv > 3.5) {
+      const N = w.N, jx = jk % N, jz = (jk / N) | 0, c = w.control(jx, jz);
+      out.push({ k: 'jam', sev: 5, ic: 'i-lights', tile: [jx, jz], t: c === 1 ? 'Stau an einer Ampelkreuzung. Ein Kreisverkehr oder eine Hauptstraße hilft.' : c === 2 ? 'Stau am Kreisverkehr. Baue eine Hauptstraße oder eine Umgehung.' : 'Stau an einer Kreuzung ohne Ampel. Baue eine Ampel oder einen Kreisverkehr.' });
+    }
     if (s.unemployment > 0.15 && s.pop > 150) out.push({ k: 'jobs', sev: 5, ic: 'i-work', t: `${Math.round(s.unemployment * 100)} % arbeitslos. Weise Gewerbe- und Industriegebiete aus.` });
     let badAir = 0; for (const b of facs) if (b.kind === 'res' && s.pollution.at(s.pollution.air, b) > 40) badAir++;
     if (badAir > 2) out.push({ k: 'air', sev: 5, ic: 'i-cloud', t: `Schlechte Luft in ${badAir} Wohnhäusern. Industrie und Kraftwerke weiter weg, Bäume pflanzen.` });
@@ -811,8 +852,9 @@ export class UI {
   adviceAction(k) {
     const i = (this.issueList || []).find((x) => x.k === k);
     if (i?.b) { const b = i.b; this.cam.lookAt(b.x + b.w / 2, b.z + b.h / 2, 3); this.select({ type: 'building', ref: b }); }
-    const menus = { power: 'power', loose: 'power', water: 'water', sewage: 'water', quality: 'water', garbage: 'waste', full: 'waste', sos: 'care' };
-    const views = { power: 'power', loose: 'power', water: 'water', sewage: 'river', quality: 'river', garbage: 'garbage', full: 'garbage', sos: 'health', air: 'air', empty: 'mood', jobs: 'mood' };
+    if (i?.tile) { this.cam.lookAt(i.tile[0] + 0.5, i.tile[1] + 0.5, 2.6); this.pickTool('traffic'); this.showView('traffic', true); return; }
+    const menus = { parking: 'traffic', power: 'power', loose: 'power', water: 'water', sewage: 'water', quality: 'water', garbage: 'waste', full: 'waste', sos: 'care' };
+    const views = { parking: 'traffic', power: 'power', loose: 'power', water: 'water', sewage: 'river', quality: 'river', garbage: 'garbage', full: 'garbage', sos: 'health', air: 'air', empty: 'mood', jobs: 'mood' };
     if (k === 'money') { this.openBudget(); return; }
     if (k === 'tip') { this.openViews(); return; }
     if (menus[k] && !i?.b) this.pickTool(menus[k]);

@@ -4,6 +4,7 @@ import { Utilities } from './utilities.js';
 import { Pollution } from './pollution.js';
 import { Waste, garbageDays } from './waste.js';
 import { Safety } from './safety.js';
+import { Parking, carsNeeded } from './parking.js';
 
 const LOAN = { amount: 25000, total: 1.12, days: 90, max: 3 };
 
@@ -33,7 +34,7 @@ export class Sim {
     this.green = new Float32Array(n);
     this.cover = { fire: new Uint8Array(n), police: new Uint8Array(n), health: new Uint8Array(n), edu: new Uint8Array(n) };
     this.growTimer = 0; this.lvTimer = 0;
-    this.acc = { util: 1, waste: 0, safety: 0, pol: 0, mood: 0 };
+    this.acc = { util: 1, waste: 0, safety: 0, pol: 0, mood: 0, park: 1 };
     this.rng = mulberry32(99);
     this.history = [];
     this.grace = null;
@@ -41,6 +42,7 @@ export class Sim {
     this.pollution = new Pollution(this);
     this.waste = new Waste(this);
     this.safety = new Safety(this);
+    this.parking = new Parking(this);
     this.recount();
     this.computeLandValue();
   }
@@ -53,7 +55,8 @@ export class Sim {
     this.pollution = new Pollution(this);
     this.waste = new Waste(this);
     this.safety = new Safety(this);
-    this.acc = { util: 1, waste: 0, safety: 0, pol: 0, mood: 0 };
+    this.parking = new Parking(this);
+    this.acc = { util: 1, waste: 0, safety: 0, pol: 0, mood: 0, park: 1 };
     this.ledger = { today: {}, yesterday: {} };
     this.blocked = { power: 0, water: 0 };
   }
@@ -113,10 +116,15 @@ export class Sim {
       else { js += b.jobs || 0; upkeep += SERVICES[b.type]?.upkeep || 0; }
     }
     const w = this.world;
-    for (let i = 0; i < w.road.length; i++) { roads += w.road[i]; lines += w.pline[i]; }
+    let avenues = 0, lights = 0, rounds = 0;
+    for (let i = 0; i < w.road.length; i++) {
+      if (w.road[i] === 1) roads++; else if (w.road[i] === 2) avenues++;
+      lines += w.pline[i];
+      if (w.junc[i] === 1) lights++; else if (w.junc[i] === 2) rounds++;
+    }
     let stops = 0; for (let i = 0; i < w.busstop.length; i++) if (w.busstop[i]) stops++;
     this.pop = pop; this.jobsC = jc; this.jobsI = ji; this.jobsS = js;
-    this.roads = roads; this.lines = lines; this.busStops = stops;
+    this.roads = roads + avenues; this.lines = lines; this.busStops = stops;
     const workers = pop * 0.52, jobs = jc + ji + js;
     this.unemployment = workers > 20 ? clamp((workers - jobs) / workers, 0, 1) : 0;
     const uc = this.util.stats?.costs || { power: 0, powerSold: 0, water: 0, sewage: 0 };
@@ -124,7 +132,8 @@ export class Sim {
     const up = this.diff.upkeep;
     this.flows = {
       taxRes: taxRes * inc, taxCom: taxCom * inc, taxInd: taxInd * inc, powerSold: uc.powerSold,
-      services: -upkeep * up, admin: -Math.max(0, pop - 150) * 0.22 * up, roads: -(roads * UPKEEP.road + lines * UPKEEP.line + stops * UPKEEP.busstop) * up,
+      services: -upkeep * up, admin: -Math.max(0, pop - 150) * 0.22 * up,
+      roads: -(roads * UPKEEP.road + avenues * UPKEEP.avenue + lines * UPKEEP.line + stops * UPKEEP.busstop + lights * UPKEEP.lights + rounds * UPKEEP.roundabout) * up,
       powerImp: -uc.power, waterImp: -uc.water, sewageImp: -uc.sewage, loans: -loanRate,
       contracts: this.contractMoney?.() || 0,
     };
@@ -210,6 +219,9 @@ export class Sim {
       add('Steuern', -(t - TAX_DEFAULT) * 2.5);
       add('Arbeitslosigkeit', -Math.min(15, this.unemployment * 45));
       add('Bodenwert', clamp((this.lv[k] - 40) / 10, -4, 4));
+      // towns from before the update get time to build car parks
+      const pg = 1 - (this.graceLeft?.() || 0) * 0.7;
+      if (carsNeeded(b) > 2) add('Parkplatzsuche', -(1 - (b.park ?? 1)) * 8 * pg);
       let lm = 0;
       for (const o of this.world.buildings.values()) if ((o.type === 'stadium' || o.type === 'tvtower') && o.state === 'done') lm += o.type === 'stadium' ? 5 : 4;
       add('Stadion & Wahrzeichen', lm);
@@ -223,6 +235,8 @@ export class Sim {
       add('Steuern', -(t - TAX_DEFAULT) * 2.5);
       add('Kaum Arbeitskräfte', this.unemployment < 0.02 && this.pop > 200 ? -6 : 0);
       if (!ind) {
+        const pg = 1 - (this.graceLeft?.() || 0) * 0.7;
+        if (carsNeeded(b) > 2) add('Parkplätze für Kundschaft', (b.park ?? 1) > 0.9 ? 2 : -(1 - (b.park ?? 1)) * 12 * pg);
         add('Zu wenig Kundschaft', this.demand.com < -0.35 ? -10 : 0);
         add('Laufkundschaft', Math.min(6, this.lv[k] / 12));
       } else {
@@ -346,6 +360,7 @@ export class Sim {
       if (!next || this.stage < next.stage || this.lv[k] < next.lv || !this.needsMet(next, k)) continue;
       if (dem < 0.15 || rng() > 0.35) continue;
       if ((b.mood ?? 60) < 55) continue;
+      if (next.parking && (b.park ?? 1) < 0.5) continue;
       if (!this.supplied(kind, next, b.x, b.z, b.w, b.h)) { this.noteBlocked(x, z); continue; }
       if (next.size === 2) {
         const spot = this.find2x2(b, kind);
@@ -484,7 +499,8 @@ export class Sim {
     }
     // systems at their own pace (in-game hours)
     const a = this.acc;
-    a.util += dtH; a.waste += dtH; a.safety += dtH; a.pol += dtH; a.mood += dtH;
+    a.util += dtH; a.waste += dtH; a.safety += dtH; a.pol += dtH; a.mood += dtH; a.park += dtH;
+    if (a.park >= 1) { this.parking.update(); a.park = 0; }
     if (a.util >= 0.1 || this.util.key !== `${this.world.version}|${this.world.lineVersion}|${this.world.bver}`) {
       this.util.solve(Math.min(a.util, 1) / 24); a.util = 0;
       // lights go out where the power is gone
@@ -523,22 +539,49 @@ export class Sim {
   }
 
   // ---- player actions ----------------------------------------------------
-  buildRoad(path) {
+  // type 1: street with two lanes, type 2: main road with four lanes (upgrades streets on the way)
+  roadCost(path, type = 1) {
     const w = this.world;
     let cost = 0; const tiles = [];
     for (const [x, z] of path) {
-      if (!w.inb(x, z) || w.isRoad(x, z) || w.buildingAt(x, z)) continue;
-      cost += w.isWater(x, z) ? COSTS.bridge : COSTS.road;
+      if (!w.inb(x, z) || w.buildingAt(x, z)) continue;
+      const k = w.idx(x, z), cur = w.road[k];
+      if (cur >= type) continue;
+      const water = w.isWater(x, z);
+      const full = type === 2 ? (water ? COSTS.bridge2 : COSTS.avenue) : (water ? COSTS.bridge : COSTS.road);
+      const have = cur === 1 ? (water ? COSTS.bridge : COSTS.road) : 0;
+      cost += full - have;
       tiles.push([x, z]);
     }
-    if (!tiles.length) return { ok: false, msg: 'Hier kann keine Straße gebaut werden.' };
+    return { cost, tiles };
+  }
+  buildRoad(path, type = 1) {
+    const w = this.world;
+    const { cost, tiles } = this.roadCost(path, type);
+    if (!tiles.length) return { ok: false, msg: type === 2 ? 'Hier ist schon eine Hauptstraße.' : 'Hier kann keine Straße gebaut werden.' };
     if (!this.canAfford(cost)) return { ok: false, msg: 'Nicht genug Geld.' };
     this.spend(cost);
-    for (const [x, z] of tiles) w.setRoad(x, z, true);
+    for (const [x, z] of tiles) w.setRoad(x, z, true, type);
     this.edgeCheck(tiles);
     this.recount();
     this.game.emit('roads');
     return { ok: true, cost, n: tiles.length };
+  }
+  // traffic lights (kind 1) or a roundabout (kind 2) at a junction; the same kind again removes it
+  setJunction(x, z, kind) {
+    const w = this.world;
+    if (!w.isJunction(x, z)) return { ok: false, msg: 'Nur an Kreuzungen und Einmündungen, wo drei oder vier Straßen zusammentreffen.' };
+    if (kind === 2 && w.isWater(x, z)) return { ok: false, msg: 'Kein Kreisverkehr auf einer Brücke.' };
+    const k = w.idx(x, z);
+    if (w.junc[k] === kind) { w.setJunction(x, z, 0); this.recount(); this.game.emit('roads'); return { ok: true, removed: true }; }
+    const cost = kind === 1 ? COSTS.lights : COSTS.roundabout;
+    if (!this.canAfford(cost)) return { ok: false, msg: 'Nicht genug Geld.' };
+    this.spend(cost);
+    w.busstop[k] = 0;
+    w.setJunction(x, z, kind);
+    this.recount();
+    this.game.emit('roads');
+    return { ok: true, cost };
   }
   // high-voltage line: over meadows, streets and water, not through buildings
   lineCost(path) {

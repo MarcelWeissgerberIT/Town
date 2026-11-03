@@ -23,13 +23,13 @@ export const GROW = {
     { name: 'Einfamilienhaus', time: 24, pop: [3, 6], size: 1, stage: 0, lv: 0, need: [] },
     { name: 'Stadthaus', time: 34, pop: [14, 22], size: 1, stage: 1, lv: 28, need: [] },
     { name: 'Mehrfamilienhaus', time: 52, pop: [44, 70], size: 1, stage: 2, lv: 45, need: ['fire', 'police'] },
-    { name: 'Wohnturm', time: 100, pop: [380, 620], size: 2, stage: 3, lv: 56, need: ['fire', 'police', 'health', 'edu'] },
+    { name: 'Wohnturm', time: 100, pop: [380, 620], size: 2, stage: 3, lv: 56, need: ['fire', 'police', 'health', 'edu'], parking: true },
   ],
   com: [null,
     { name: 'Laden', time: 24, jobs: [4, 8], size: 1, stage: 0, lv: 0, need: [] },
     { name: 'Geschäftshaus', time: 34, jobs: [18, 30], size: 1, stage: 1, lv: 30, need: [] },
-    { name: 'Kaufhaus', time: 56, jobs: [70, 110], size: 1, stage: 2, lv: 46, need: ['fire', 'police'] },
-    { name: 'Bürohochhaus', time: 115, jobs: [700, 1100], size: 2, stage: 3, lv: 60, need: ['fire', 'police', 'health'] },
+    { name: 'Kaufhaus', time: 56, jobs: [70, 110], size: 1, stage: 2, lv: 46, need: ['fire', 'police'], parking: true },
+    { name: 'Bürohochhaus', time: 115, jobs: [700, 1100], size: 2, stage: 3, lv: 60, need: ['fire', 'police', 'health'], parking: true },
   ],
   ind: [null,
     { name: 'Werkstatt', time: 24, jobs: [8, 14], size: 1, stage: 0, lv: 0, need: [] },
@@ -60,6 +60,10 @@ export const SERVICES = {
   rescue: { name: 'Rettungswache', w: 2, h: 1, cost: 5500, upkeep: 120, radius: 18, stage: 1, cat: 'care', use: 0.06, wuse: 6, crit: true, care: { ambulances: 2 }, desc: 'Zwei Rettungswagen für Notfälle. Patienten kommen ins Krankenhaus.' },
   hospital: { name: 'Krankenhaus', w: 2, h: 2, cost: 12000, upkeep: 280, radius: 26, cover: 'health', happy: 4, stage: 2, cat: 'care', use: 1.0, wuse: 140, crit: true, care: { ambulances: 3, beds: 60, treat: 2 }, desc: '60 Betten, drei Rettungswagen und ein Hubschrauberlandeplatz.' },
 
+  parking: { name: 'Parkplatz', w: 1, h: 1, cost: 900, upkeep: 6, stage: 0, cat: 'traffic', park: 16, radius: 5, desc: '16 Stellplätze für Kundschaft und Anwohner im Umkreis.' },
+  garage: { name: 'Tiefgarage', w: 1, h: 1, cost: 7000, upkeep: 28, stage: 1, cat: 'traffic', park: 90, radius: 6, green: 1, use: 0.03, desc: '90 Stellplätze unter der Erde. Oben bleibt ein grüner Platz.' },
+  parkhaus: { name: 'Parkhaus', w: 2, h: 2, cost: 15000, upkeep: 60, stage: 2, cat: 'traffic', park: 280, radius: 7, use: 0.06, desc: '280 Stellplätze auf vier Ebenen – für Innenstadt und Bürotürme.' },
+
   substation: { name: 'Umspannwerk', w: 1, h: 1, cost: 1800, upkeep: 18, stage: 0, cat: 'power', sub: 30, desc: 'Verbindet Hochspannungsleitungen und Großkraftwerke mit dem Stromnetz in den Straßen. Bis 30 MW.' },
   wind: { name: 'Windrad', w: 1, h: 1, cost: 3800, upkeep: 22, stage: 0, cat: 'power', power: { gen: 3, ptype: 'wind' }, noRoad: true, emit: { noise: 32, r: 2 }, desc: '3 MW bei kräftigem Wind, bei Flaute fast nichts. Laut für direkte Nachbarn.' },
   solar: { name: 'Solarpark', w: 2, h: 2, cost: 6500, upkeep: 16, stage: 0, cat: 'power', power: { gen: 6, ptype: 'solar' }, noRoad: true, desc: 'Bis 6 MW mittags, nachts nichts. Ganz ohne Abgase.' },
@@ -79,6 +83,7 @@ export const SERVICES = {
 };
 
 export const CATS = {
+  traffic: { name: 'Verkehr', icon: 'i-lights' },
   power: { name: 'Strom', icon: 'i-bolt' },
   water: { name: 'Wasser', icon: 'i-drop' },
   waste: { name: 'Müll', icon: 'i-bin' },
@@ -108,8 +113,8 @@ export const DIFFICULTY = {
   hard: { name: 'Anspruchsvoll', money: 18000, income: 0.88, upkeep: 1.2, risk: 1.35, desc: 'Knappe Kasse, höhere Kosten, mehr Notfälle.' },
 };
 
-export const COSTS = { road: 25, bridge: 180, tree: 15, bulldoze: 5, busstop: 250, zone: 0, line: 30 };
-export const UPKEEP = { road: 0.6, busstop: 15, line: 0.3 };
+export const COSTS = { road: 25, avenue: 70, bridge: 180, bridge2: 320, tree: 15, bulldoze: 5, busstop: 250, zone: 0, line: 30, lights: 600, roundabout: 900 };
+export const UPKEEP = { road: 0.6, avenue: 1.4, busstop: 15, line: 0.3, lights: 4, roundabout: 2 };
 
 export const DAY_SECONDS = 150; // real seconds per in-game day at 1x speed
 

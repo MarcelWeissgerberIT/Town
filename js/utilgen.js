@@ -1,5 +1,6 @@
 import { col, shade, pick, randRange } from './util.js';
-import { fq, setTint, boxWalls, flatRoof, hipRoof, gableRoof, gableTri, aoDecal, sign, parkedCar } from './buildgen.js';
+import { fq, setTint, boxWalls, flatRoof, hipRoof, gableRoof, gableTri, aoDecal, sign, parkedCar, hedge } from './buildgen.js';
+import { hasModel } from './models3d.js';
 import { houseStyle, body, mainRoof, canopy, steps } from './houses.js';
 
 // ---------------------------------------------------------------------------
@@ -502,7 +503,85 @@ function rescue(B, rng, meta, LW, LD) {
   meta.height = 1.0;
 }
 
+// ================================================================ parking
+// surface car park: two rows of bays along an aisle, cars come and go (meta.bays)
+function parkingLot(B, rng, meta) {
+  B.rect('asphalt', -0.5, -0.5, 0.5, 0.5, 0.005, C('#d0d0ce'), 2);
+  const line = C('#f4f2ec');
+  const bays = [];
+  const bw = 0.115, x0 = -0.46;
+  for (const [z0, z1, face] of [[-0.46, -0.16, 0], [0.12, 0.42, Math.PI]]) {
+    for (let i = 0; i <= 8; i++) {
+      const x = x0 + i * bw;
+      if (face && i >= 3 && i <= 5) continue; // entrance gap toward the street
+      B.box('solid', x - 0.004, 0.005, z0, x + 0.004, 0.0075, z1, line);
+    }
+    for (let i = 0; i < 8; i++) {
+      if (face && (i === 3 || i === 4)) continue;
+      bays.push([x0 + (i + 0.5) * bw, (z0 + z1) / 2, 0, face ? 1 : -1]);
+    }
+  }
+  // arrows on the aisle, ticket machine, P sign, hedges and lamps
+  B.box('solid', 0.0, 0.0, -0.02, 0.012, 0.006, 0.08, line);
+  B.box('solid', 0.38, 0, 0.44, 0.41, 0.07, 0.47, C('#3a3d42'));
+  B.box('solid', 0.375, 0.04, 0.47, 0.415, 0.065, 0.472, C('#f2c230'));
+  B.box('solid', -0.44, 0, 0.45, -0.43, 0.2, 0.46, C('#5b6168'));
+  B.box('solid', -0.48, 0.15, 0.455, -0.39, 0.24, 0.462, C('#1f5fa8'));
+  B.box('solid', -0.455, 0.17, 0.462, -0.448, 0.22, 0.464, C('#ffffff'));
+  B.box('solid', -0.448, 0.205, 0.462, -0.425, 0.22, 0.464, C('#ffffff'));
+  B.box('solid', -0.448, 0.188, 0.462, -0.43, 0.195, 0.464, C('#ffffff'));
+  B.box('solid', -0.43, 0.195, 0.462, -0.425, 0.205, 0.464, C('#ffffff'));
+  hedge(B, -0.49, -0.49, 0.49, -0.47, 0.05);
+  meta.lamps.push([-0.47, 0.0], [0.47, 0.0]);
+  meta.trees.push([-0.47, -0.3, 'round', 0.6], [0.47, -0.3, 'round', 0.6]);
+  meta.bays = bays;
+  meta.door = [0, 0.48];
+  meta.height = 0.25;
+}
+
+// entrance of an underground car park: Meshy model, or a ramp with a glass pavilion
+function garage(B, rng, meta) {
+  B.rect('cobble', -0.5, -0.5, 0.5, 0.5, 0.005, C('#e8e1d4'), 1.1);
+  if (hasModel('tiefgarage')) {
+    meta.model = { name: 'tiefgarage', x: 0, z: 0, yaw: 0, fit: 0.98 };
+  } else {
+    B.box('solid', -0.2, 0, -0.3, -0.16, 0.06, 0.5, CONC);
+    B.box('solid', 0.16, 0, -0.3, 0.2, 0.06, 0.5, CONC);
+    B.quad('solid', [-0.16, 0.0, 0.5], [0.16, 0.0, 0.5], [0.16, -0.12, -0.3], [-0.16, -0.12, -0.3], C('#8d8d8b'));
+    B.box('glass', -0.22, 0, -0.42, 0.22, 0.14, -0.3, C('#cfe6ea'));
+    B.box('grass', -0.24, 0.14, -0.44, 0.24, 0.16, -0.18, C('#cfdcae'));
+    hedge(B, -0.45, -0.45, -0.3, 0.45, 0.06); hedge(B, 0.3, -0.45, 0.45, 0.45, 0.06);
+  }
+  // the little square on top
+  meta.trees.push([-0.38, -0.38, 'round', 0.8], [0.38, -0.38, 'round', 0.8]);
+  meta.lamps.push([0.4, 0.4]);
+  meta.door = [0, 0.48];
+  meta.height = 0.3;
+}
+
+// multi-storey car park: Meshy model, or concrete decks with parked cars
+function parkhaus(B, rng, meta, LW, LD) {
+  B.rect('asphalt', -LW / 2, -LD / 2, LW / 2, LD / 2, 0.005, C('#d0d0ce'), 2);
+  if (hasModel('parkhaus')) {
+    meta.model = { name: 'parkhaus', x: 0, z: -0.04, yaw: 0, fit: 1.86 };
+    meta.height = 1.2;
+  } else {
+    const w = 1.7, d = 1.6, lv = 4, fh = 0.22;
+    for (let i = 0; i <= lv; i++) {
+      const y = i * fh;
+      B.box('solid', -w / 2, y, -d / 2, w / 2, y + 0.03, d / 2, CONC);
+      if (i < lv) for (const [x, z] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2], [0, -d / 2], [0, d / 2]]) B.box('solid', x - 0.03, y, z - 0.03, x + 0.03, y + fh, z + 0.03, shade(CONC, 0.9));
+      if (i > 0) B.box('solid', -w / 2, y + 0.03, d / 2 - 0.01, w / 2, y + 0.08, d / 2, C('#c9a26a'));
+    }
+    for (let i = 0; i <= lv; i++) for (let k = 0; k < 6; k++) if (rng() < 0.6) parkedCar(B, -0.6 + k * 0.24, -0.3 + (k % 2) * 0.55, Math.PI / 2, rng);
+    meta.height = lv * fh + 0.05;
+  }
+  meta.door = [0, LD / 2 - 0.02];
+  meta.lamps.push([-0.9, 0.95], [0.9, 0.95]);
+}
+
 export const GEN = {
+  parking: parkingLot, garage, parkhaus,
   substation, wind, solar, battery, hydro, coal: coalPlant, gas: gasPlant,
   well, watertower, waterworks, sewage: sewagePlant,
   landfill, recycling, incinerator, clinic, rescue,

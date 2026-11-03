@@ -78,7 +78,7 @@ export class Pollution {
       if (w.road[k] && !w.terrain[k]) {
         const x = k % N, z = (k / N) | 0;
         let n = 0; for (const d of DIRS) if (w.isRoad(x + d.dx, z + d.dz)) n++;
-        eAir[k] += (n >= 3 ? 0.9 : 0.45) * traffic;
+        eAir[k] += (n >= 3 ? 0.9 : 0.45) * traffic * (w.road[k] === 2 ? 1.6 : 1);
       }
     }
     for (const b of w.buildings.values()) {
@@ -186,7 +186,7 @@ export class Pollution {
       if (!w.road[k] || w.terrain[k]) continue;
       const x = k % N, z = (k / N) | 0;
       let n = 0; for (const d of DIRS) if (w.isRoad(x + d.dx, z + d.dz)) n++;
-      add(x + 0.5, z + 0.5, (n >= 3 ? 16 : 10) * traffic, 1);
+      add(x + 0.5, z + 0.5, (n >= 3 ? 16 : 10) * traffic * (w.road[k] === 2 ? 1.5 : 1), w.road[k] === 2 ? 1.6 : 1);
     }
     for (const b of w.buildings.values()) {
       if (b.state !== 'done' || b.abandoned) continue;

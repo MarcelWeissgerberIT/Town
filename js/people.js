@@ -78,17 +78,20 @@ export class People {
     const toB0 = [D0[0] - T[0][0], D0[1] - T[0][1]];
     const rf = R(first);
     const s = (rf[0] * toB0[0] + rf[1] * toB0[1]) >= 0 ? 1 : -1;
+    // sidewalks of main roads are narrower and further out
+    const off = (Tc) => ((this.world.roadType(Math.floor(Tc[0]), Math.floor(Tc[1])) || 1) === 2 ? 0.46 : 0.4);
     const proj = (Tc, d, D, side) => {
-      const r = R(d);
+      const r = R(d), o = off(Tc);
       const along = clamp((D[0] - Tc[0]) * d[0] + (D[1] - Tc[1]) * d[1], -0.42, 0.42);
-      return [Tc[0] + side * 0.4 * r[0] + d[0] * along, Tc[1] + side * 0.4 * r[1] + d[1] * along];
+      return [Tc[0] + side * o * r[0] + d[0] * along, Tc[1] + side * o * r[1] + d[1] * along];
     };
     pts.push(proj(T[0], first, D0, s));
     for (let i = 1; i < n - 1; i++) {
       const a = dirs[i - 1], b = dirs[i];
       if (a[0] === b[0] && a[1] === b[1]) continue;
       const ra = R(a), rb = R(b);
-      pts.push([T[i][0] + s * 0.4 * (ra[0] + rb[0]), T[i][1] + s * 0.4 * (ra[1] + rb[1])]);
+      const o = off(T[i]);
+      pts.push([T[i][0] + s * o * (ra[0] + rb[0]), T[i][1] + s * o * (ra[1] + rb[1])]);
     }
     const end = proj(T[n - 1], last, D1, s);
     pts.push(end);
