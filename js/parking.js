@@ -51,13 +51,13 @@ export class Parking {
       const cand = [];
       let total = 0;
       for (const f of fac) {
-        const dist = Math.hypot(f.x - cx, f.z - cz);
+        const ddx = f.x - cx, ddz = f.z - cz, dist = Math.sqrt(ddx * ddx + ddz * ddz);
         if (dist > f.r) continue;
         const wgt = f.cap / (1 + dist * 0.3);
         cand.push([f, wgt]); total += wgt;
       }
       for (let z = Math.floor(cz - 2); z <= Math.ceil(cz + 2); z++) for (let x = Math.floor(cx - 2); x <= Math.ceil(cx + 2); x++) {
-        if (!w.inb(x, z) || Math.hypot(x + 0.5 - cx, z + 0.5 - cz) > 2.2) continue;
+        if (!w.inb(x, z) || (x + 0.5 - cx) ** 2 + (z + 0.5 - cz) ** 2 > 4.84) continue;
         const k = z * N + x;
         const cap = streetCap(k);
         if (!cap) continue;

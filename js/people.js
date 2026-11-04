@@ -106,6 +106,7 @@ export class People {
   inView(b, view) { return Math.abs(b.x + b.w / 2 - view.x) < view.r && Math.abs(b.z + b.h / 2 - view.z) < view.r; }
 
   startTrip(p, from, to) {
+    this.trips = (this.trips ?? 1) - 1;
     const wp = this.sidewalkPath(from, to);
     if (!wp) return false;
     p.wp = wp; p.wi = 1; p.x = wp[0][0]; p.z = wp[0][1]; p.mode = 'walk'; p.dest = to; p.from = from;
@@ -176,6 +177,8 @@ export class People {
     const target = Math.min(this.max, Math.round((10 + sim.pop * 0.16) * act));
     this.spawnTimer -= dt;
     const civ = this.list.filter((p) => p.kind !== 'worker').length;
+    // a few new walks per frame at most: path searches are spread out, the picture stays smooth
+    this.trips = 4;
     if (this.spawnTimer <= 0 && civ < target) { this.spawnTimer = 0.08; for (let i = 0; i < 3; i++) this.spawn(view, sim); }
     this.workerTimer = (this.workerTimer || 0) - dt;
     if (this.workerTimer <= 0) { this.workerTimer = 1.5; this.spawnWorkers(sites.sites); }
@@ -192,7 +195,7 @@ export class People {
         p.phase += step * 70;
       } else if (p.mode === 'inside') {
         p.timer -= dt;
-        if (p.timer <= 0) {
+        if (p.timer <= 0 && this.trips > 0) {
           // come out again and go somewhere else
           const from = p.dest;
           if (!from || !this.world.buildings.has(from.id)) { p.dead = true; continue; }
@@ -207,6 +210,7 @@ export class People {
         if (!b || !this.world.buildings.has(b.id)) { p.dead = true; continue; }
         if (!p.wp || p.wi >= p.wp.length) {
           if (p.timer <= 0) {
+            if (this.trips <= 0) continue;
             const home = p.home && this.world.buildings.has(p.home.id) ? p.home : null;
             if (!home || !this.startTrip(p, b, home)) p.dead = true;
             continue;

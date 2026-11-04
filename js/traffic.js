@@ -589,12 +589,14 @@ export class Traffic {
       for (const v of this.vehicles) if (!v.leaving && !v.path.every(([x, z]) => !w.inb(x, z) || w.road[z * N + x])) this.leave(v);
     }
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) { this.spawnTimer = 0.35; this.spawnTraffic(view, sim); }
+    // spawning, parked cars and statistics take turns, never all in the same frame
+    let busy = false;
+    if (this.spawnTimer <= 0) { this.spawnTimer = 0.35; this.spawnTraffic(view, sim); busy = true; }
     this.parkT = (this.parkT || 0) - dt;
-    if (this.parkT <= 0) { this.parkT = 3; this.updateParked(sim.hour); }
+    if (this.parkT <= 0 && !busy) { this.parkT = 3; this.updateParked(sim.hour); busy = true; }
     // traffic volume per tile and queues at junctions (smoothed)
     this.statT += dt;
-    if (this.statT > 1) {
+    if (this.statT > 1 && !busy) {
       const f = Math.pow(0.985, this.statT);
       for (let k = 0; k < this.flow.length; k++) { this.flow[k] *= f; this.jam[k] *= 0.9; }
       for (const v of this.vehicles) if (v.held >= 0 && v.speed < 0.05) this.jam[v.held] += 0.1;

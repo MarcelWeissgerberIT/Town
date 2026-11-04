@@ -125,21 +125,33 @@ export class Pollution {
     for (let s = 0; s < steps; s++) {
       for (let k = 0; k < N * N; k++) air[k] += eAir[k] * h * 1.6;
       // advect (back-trace) + diffuse
-      for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
-        const sx = x - wx * h, sz = z - wz * h;
-        const x0 = Math.floor(sx), z0 = Math.floor(sz), fx = sx - x0, fz = sz - z0;
-        const g = (xx, zz) => (xx >= 0 && zz >= 0 && xx < N && zz < N ? air[zz * N + xx] : 0);
-        tmp[z * N + x] = g(x0, z0) * (1 - fx) * (1 - fz) + g(x0 + 1, z0) * fx * (1 - fz) + g(x0, z0 + 1) * (1 - fx) * fz + g(x0 + 1, z0 + 1) * fx * fz;
+      // the wind shift is the same for every cell: one offset and one set of weights
+      const ox = -wx * h, oz = -wz * h;
+      const dx0 = Math.floor(ox), dz0 = Math.floor(oz), fx = ox - dx0, fz = oz - dz0;
+      const w00 = (1 - fx) * (1 - fz), w10 = fx * (1 - fz), w01 = (1 - fx) * fz, w11 = fx * fz;
+      for (let z = 0; z < N; z++) {
+        const z0 = z + dz0, z1 = z0 + 1;
+        const r0 = z0 >= 0 && z0 < N ? z0 * N : -1, r1 = z1 >= 0 && z1 < N ? z1 * N : -1;
+        for (let x = 0; x < N; x++) {
+          const x0 = x + dx0, x1 = x0 + 1;
+          const in0 = x0 >= 0 && x0 < N, in1 = x1 >= 0 && x1 < N;
+          let v = 0;
+          if (r0 >= 0) { if (in0) v += air[r0 + x0] * w00; if (in1) v += air[r0 + x1] * w10; }
+          if (r1 >= 0) { if (in0) v += air[r1 + x0] * w01; if (in1) v += air[r1 + x1] * w11; }
+          tmp[z * N + x] = v;
+        }
       }
       const dk = 0.12 * h;
       const fade = Math.pow(0.86, h);
+      const treeF = [1, Math.pow(0.95, h), Math.pow(0.9, h), Math.pow(0.85, h), Math.pow(0.8, h)];
       for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
         const k = z * N + x, c = tmp[k];
         const n = (x > 0 ? tmp[k - 1] : 0) + (x < N - 1 ? tmp[k + 1] : 0) + (z > 0 ? tmp[k - N] : 0) + (z < N - 1 ? tmp[k + N] : 0);
         let v = c + dk * (n - 4 * c);
         const t = w.trees[k];
-        if (t) v *= Math.pow(1 - 0.05 * t, h);
-        air[k] = clamp(v * fade, 0, 100);
+        if (t) v *= treeF[t] ?? Math.pow(1 - 0.05 * t, h);
+        v *= fade;
+        air[k] = v < 0 ? 0 : v > 100 ? 100 : v;
       }
     }
     // parks act as green lungs

@@ -152,9 +152,11 @@ export class Sim {
       const cx = b.x + b.w / 2, cz = b.z + b.h / 2;
       const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(N - 1, Math.ceil(cx + r));
       const z0 = Math.max(0, Math.floor(cz - r)), z1 = Math.min(N - 1, Math.ceil(cz + r));
+      const r2 = r * r;
       for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
-        const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
-        if (d > r) continue;
+        const ddx = x + 0.5 - cx, ddz = z + 0.5 - cz, d2 = ddx * ddx + ddz * ddz;
+        if (d2 > r2) continue;
+        const d = Math.sqrt(d2);
         const k = z * N + x;
         if (val) lv[k] += val * (1 - d / r * 0.6);
         if (coverKey) this.cover[coverKey][k] = 1;
@@ -181,7 +183,7 @@ export class Sim {
       if (w.terrain[k] === 1 && pol.water[k] > 20) for (const d of DIRS) { const nx = x + d.dx, nz = z + d.dz; if (w.inb(nx, nz)) lv[nz * N + nx] -= pol.water[k] / 12; }
     }
     if (w.centre) for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
-      const d = Math.hypot(x - w.centre[0], z - w.centre[1]);
+      const ddx = x - w.centre[0], ddz = z - w.centre[1], d = Math.sqrt(ddx * ddx + ddz * ddz);
       lv[z * N + x] += Math.max(0, 14 - d * 0.6) + Math.min(22, this.pop / 700);
     }
     for (let i = 0; i < lv.length; i++) lv[i] = clamp(lv[i], 0, 100);
@@ -222,9 +224,7 @@ export class Sim {
       // towns from before the update get time to build car parks
       const pg = 1 - (this.graceLeft?.() || 0) * 0.7;
       if (carsNeeded(b) > 2) add('Parkplatzsuche', -(1 - (b.park ?? 1)) * 8 * pg);
-      let lm = 0;
-      for (const o of this.world.buildings.values()) if ((o.type === 'stadium' || o.type === 'tvtower') && o.state === 'done') lm += o.type === 'stadium' ? 5 : 4;
-      add('Stadion & Wahrzeichen', lm);
+      add('Stadion & Wahrzeichen', this.landmarkBonus ?? this.landmarks());
     } else {
       const ind = b.kind === 'ind';
       add('Kein Strom', b.pw === 0 ? (ind ? -45 : -40) : 0);
@@ -251,8 +251,14 @@ export class Sim {
   }
 
   // mood of every building; people move out of unhappy places and come back when it improves
+  landmarks() {
+    let lm = 0;
+    for (const o of this.world.buildings.values()) if ((o.type === 'stadium' || o.type === 'tvtower') && o.state === 'done') lm += o.type === 'stadium' ? 5 : 4;
+    return lm;
+  }
   updateMood(dtH) {
     let wsum = 0, msum = 0;
+    this.landmarkBonus = this.landmarks();
     for (const b of this.world.buildings.values()) {
       if (b.state !== 'done' || b.kind === 'svc') continue;
       const L = GROW[b.kind]?.[b.level];
@@ -500,7 +506,6 @@ export class Sim {
     // systems at their own pace (in-game hours)
     const a = this.acc;
     a.util += dtH; a.waste += dtH; a.safety += dtH; a.pol += dtH; a.mood += dtH; a.park += dtH;
-    if (a.park >= 1) { this.parking.update(); a.park = 0; }
     if (a.util >= 0.1 || this.util.key !== `${this.world.version}|${this.world.lineVersion}|${this.world.bver}`) {
       this.util.solve(Math.min(a.util, 1) / 24); a.util = 0;
       // lights go out where the power is gone
@@ -511,9 +516,8 @@ export class Sim {
       }
     }
     if (a.waste >= 0.25) { this.waste.hour(a.waste); a.waste = 0; }
-    if (a.safety >= 0.5) { this.safety.hour(a.safety); a.safety = 0; }
-    if (a.pol >= 1) { this.pollution.update(Math.min(a.pol, 6)); a.pol = 0; }
-    if (a.mood >= 0.5) { this.updateMood(Math.min(a.mood, 6)); a.mood = 0; }
+    this.lvTimer -= dt;
+    this.heavyJob();
     this.waste.tick(dt);
     this.safety.tick(dt);
     this.growTimer -= dt;
@@ -523,8 +527,23 @@ export class Sim {
       this.grow();
       this.checkStage();
     }
-    this.lvTimer -= dt;
-    if (this.lvTimer <= 0) { this.lvTimer = 6; this.computeLandValue(); }
+  }
+
+  // The bigger calculations (pollution, mood, land value, parking, health) run one per
+  // frame so the picture never stutters, and wait while the player drags or pinches the
+  // map – unless they are long overdue.
+  heavyJob() {
+    const a = this.acc;
+    const r = this._jobDue || (this._jobDue = new Float32Array(5));
+    r[0] = a.park; r[1] = a.safety / 0.5; r[2] = a.pol; r[3] = a.mood / 0.5; r[4] = 1 - this.lvTimer / 6;
+    let best = -1;
+    for (let i = 0; i < 5; i++) if (r[i] >= 1 && (best < 0 || r[i] > r[best])) best = i;
+    if (best < 0 || (this.interacting && r[best] < 4)) return;
+    if (best === 0) { this.parking.update(); a.park = 0; }
+    else if (best === 1) { this.safety.hour(a.safety); a.safety = 0; }
+    else if (best === 2) { this.pollution.update(Math.min(a.pol, 6)); a.pol = 0; }
+    else if (best === 3) { this.updateMood(Math.min(a.mood, 6)); a.mood = 0; }
+    else { this.lvTimer = 6; this.computeLandValue(); }
   }
 
   newDay() {

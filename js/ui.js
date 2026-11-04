@@ -77,6 +77,11 @@ export class UI {
     ex.onclick = () => this.setCinema(false);
     $('app').appendChild(ex);
     this.bindTouchTaps();
+    for (const [id, key] of [['info', 'infoHeld'], ['advice', 'adviceHeld']]) {
+      $(id).addEventListener('pointerdown', () => { this[key] = true; });
+      const off = () => { if (this[key]) { this[key] = false; if (key === 'infoHeld') setTimeout(() => this.sel && this.renderInfo(), 0); } };
+      window.addEventListener('pointerup', off); window.addEventListener('pointercancel', off);
+    }
     // panels on the right start below the top bar, whatever its height
     const hud = document.querySelector('.hud-top');
     const place = () => document.documentElement.style.setProperty('--hud-b', `${Math.round(hud.getBoundingClientRect().bottom)}px`);
@@ -96,8 +101,16 @@ export class UI {
     }, true);
     document.addEventListener('pointerup', (e) => {
       const d = down; down = null;
-      if (!d || e.pointerId !== d.id || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 14) return;
-      if (!d.b.contains(document.elementFromPoint(e.clientX, e.clientY))) return;
+      if (!d || e.pointerId !== d.id || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 16) return;
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      // the panel may have been redrawn under the finger: take the same button in its new form
+      if (!d.b.isConnected) {
+        const nb = hit?.closest?.('button, .toast');
+        const same = (k) => d.b.dataset[k] !== undefined && nb?.dataset[k] === d.b.dataset[k];
+        if (nb && (same('act') || same('adv') || same('tool') || (d.b.id && nb.id === d.b.id))) d.b = nb;
+        else return;
+      }
+      if (!d.b.contains(hit)) return;
       synthEl = d.b; synthAt = performance.now();
       d.b.click();
     }, true);
@@ -266,23 +279,57 @@ export class UI {
       this.cam.lookAt((e.clientX - r.left) / r.width * N, (e.clientY - r.top) / r.height * N);
     });
   }
+  // ------------------------------------------------------------- map gestures
+  // The map follows the fingers directly: the ground point that was touched stays under
+  // the finger, a pinch zooms and turns around the point between the fingers, and a swipe
+  // lets the map glide on. Lifting one finger of a pinch carries on as a one-finger drag.
+  grab(px, py) { const g = this.cam.ground(px, py); return g ? { x: g.x, z: g.z } : null; }
+  startPan(id, x, y, touch, moved = false) {
+    const anchor = this.grab(x, y);
+    this.drag = { mode: 'pan', id, anchor, x, y, touch, moved, trail: [] };
+  }
+  startGesture() {
+    const [a, b] = [...this.pointers.values()];
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    this.cam.stop();
+    this.drag = {
+      mode: 'gesture', anchor: this.grab(mx, my), d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)),
+      a0: Math.atan2(b.y - a.y, b.x - a.x), view0: this.cam.view, az0: this.cam.az, turning: false, turn0: 0,
+    };
+  }
+  track(d) {
+    const t = performance.now(), tr = d.trail;
+    tr.push([t, this.cam.target.x, this.cam.target.z]);
+    while (tr.length > 2 && t - tr[0][0] > 120) tr.shift();
+  }
+  release(d) {
+    const tr = d.trail;
+    if (!tr || tr.length < 2) return;
+    const now = performance.now(), last = tr[tr.length - 1], first = tr[0];
+    // a finger that stopped before lifting leaves the map where it is
+    if (now - last[0] > 70 || last[0] - first[0] < 12) return;
+    const dt = (last[0] - first[0]) / 1000;
+    const vx = (last[1] - first[1]) / dt, vz = (last[2] - first[2]) / dt;
+    if (Math.hypot(vx, vz) > this.cam.view * 0.35) this.cam.fling(vx, vz);
+  }
   down(e) {
     this.canvas.setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
+    this.cam.stop();
     if (this.pointers.size === 2) {
       if (this.drag && this.drag.mode === 'tool') this.cancelTool();
-      const [a, b] = [...this.pointers.values()];
-      this.drag = { mode: 'gesture', d: Math.hypot(a.x - b.x, a.y - b.y), a: Math.atan2(b.y - a.y, b.x - a.x), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      this.startGesture();
       return;
     }
     if (this.pointers.size > 2) return;
     if (this.cam.cinematic) this.setCinema(false);
+    const touch = e.pointerType !== 'mouse';
     if (e.button === 2) this.drag = { mode: 'rotate', x: e.clientX };
-    else if (e.button === 1) this.drag = { mode: 'pan', x: e.clientX, y: e.clientY };
-    else if (this.tool === 'inspect') this.drag = { mode: 'click-or-pan', x: e.clientX, y: e.clientY, moved: false };
+    else if (e.button === 1) this.startPan(e.pointerId, e.clientX, e.clientY, false, true);
+    else if (this.tool === 'inspect') { this.startPan(e.pointerId, e.clientX, e.clientY, touch); this.drag.tap = true; }
     else {
       const t = this.tileAt(e.clientX, e.clientY);
-      this.drag = { mode: 'tool', start: t, cur: t, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch', planted: new Set() };
+      this.drag = { mode: 'tool', start: t, cur: t, x: e.clientX, y: e.clientY, touch, planted: new Set() };
       this.toolPreview();
     }
   }
@@ -294,23 +341,29 @@ export class UI {
       if (e.pointerType === 'mouse' && this.tool !== 'inspect') { this.hoverTile = this.tileAt(e.clientX, e.clientY); this.toolPreview(); }
       return;
     }
-    if (d.mode === 'gesture' && this.pointers.size >= 2) {
+    if (d.mode === 'gesture') {
+      if (this.pointers.size < 2 || !d.anchor) return;
       const [a, b] = [...this.pointers.values()];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const dist = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), ang = Math.atan2(b.y - a.y, b.x - a.x);
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      if (dist > 10 && d.d > 10) this.cam.zoomAt(d.d / dist, mx, my);
-      this.cam.panPixels(mx - d.mx, my - d.my); this.cam.snapPan();
-      let da = ang - d.a; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
-      if (Math.abs(da) < 0.5) this.cam.rotateBy(-da);
-      d.d = dist; d.a = ang; d.mx = mx; d.my = my;
+      let da = ang - d.a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+      // turning starts only after a clear twist, so a plain pinch never tilts the map
+      if (!d.turning && Math.abs(da) > 0.26) { d.turning = true; d.turn0 = da; }
+      const az = d.turning ? d.az0 - (da - d.turn0) : undefined;
+      this.cam.held = true;
+      this.cam.pinTo(d.anchor, mx, my, d.view0 * d.d0 / dist, az);
       return;
     }
     if (d.mode === 'rotate') { this.cam.rotateBy(-(e.clientX - d.x) * 0.006); d.x = e.clientX; return; }
-    if (d.mode === 'pan' || d.mode === 'click-or-pan') {
-      if (d.mode === 'click-or-pan' && !d.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
-      d.moved = true;
-      this.cam.panPixels(e.clientX - d.x, e.clientY - d.y); this.cam.snapPan();
-      d.x = e.clientX; d.y = e.clientY;
+    if (d.mode === 'pan') {
+      if (e.pointerId !== d.id) return;
+      // a finger wobbles a little on a tap; only a real move drags the map
+      if (!d.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < (d.touch ? 11 : 5)) return;
+      if (!d.moved) { d.moved = true; d.anchor = this.grab(e.clientX, e.clientY) || d.anchor; }
+      if (!d.anchor) return;
+      this.cam.held = true;
+      this.cam.pinTo(d.anchor, e.clientX, e.clientY);
+      this.track(d);
       return;
     }
     if (d.mode === 'tool') {
@@ -322,12 +375,26 @@ export class UI {
   up(e, cancel = false) {
     const p = this.pointers.get(e.pointerId);
     this.pointers.delete(e.pointerId);
+    this.interactUntil = performance.now() + 400;
     const d = this.drag;
     if (!d) return;
-    if (d.mode === 'gesture') { if (this.pointers.size === 0) this.drag = null; return; }
+    if (d.mode === 'gesture') {
+      // one finger stays: keep dragging with it, no jump
+      if (this.pointers.size === 1) {
+        const [id, q] = [...this.pointers.entries()][0];
+        this.startPan(id, q.x, q.y, true, true);
+      } else if (this.pointers.size === 2) this.startGesture();
+      else if (this.pointers.size === 0) { this.drag = null; this.cam.held = false; }
+      return;
+    }
+    if (d.mode === 'pan' && e.pointerId !== d.id) return;
     this.drag = null;
+    this.cam.held = false;
     if (cancel) { this.overlay.clear(); return; }
-    if (d.mode === 'click-or-pan' && !d.moved && p && performance.now() - p.t < 600) this.click(e.clientX, e.clientY);
+    if (d.mode === 'pan') {
+      if (d.moved) this.release(d);
+      else if (d.tap && p && performance.now() - p.t < 700) this.click(e.clientX, e.clientY);
+    }
     if (d.mode === 'tool') this.toolApply(d);
   }
   key(e, down) {
@@ -591,6 +658,9 @@ export class UI {
       for (const c in COVER_NAMES) html += `<span class="svc ${this.sim.cover[c][k] ? 'ok' : ''}">${COVER_NAMES[c]}</span>`;
       html += '</div>';
     }
+    // the panel refreshes four times a second; rebuilding it under a finger would swallow the tap
+    if (!force && (html === this.infoHtml || this.infoHeld)) return;
+    this.infoHtml = html;
     el.innerHTML = html;
     el.onclick = (e) => {
       const a = e.target.closest('[data-act]')?.dataset.act;
@@ -598,7 +668,7 @@ export class UI {
       if (a === 'close') this.closeInfo();
       if (a === 'zoom' && s.type === 'building') { const b = s.ref; this.cam.lookAt(b.x + b.w / 2, b.z + b.h / 2, Math.max(1.6, b.w * 1.4 + (b.height || 0.5) * 0.6)); }
       if (a === 'demolish' && s.type === 'building') {
-        if (!this.confirmDemolish) { this.confirmDemolish = true; this.renderInfo(); return; }
+        if (!this.confirmDemolish) { this.confirmDemolish = true; this.renderInfo(true); return; }
         this.sim.demolish(s.ref); this.audio?.play('demolish'); this.closeInfo();
       }
       if (a === 'follow') this.follow(s);
@@ -744,24 +814,27 @@ export class UI {
 
   updateHud() {
     const s = this.sim;
-    $('sPop').textContent = fmtNum(s.pop);
-    $('sJobs').textContent = fmtNum(s.jobsC + s.jobsI + s.jobsS);
-    const m = $('sMoney'); m.textContent = fmtMoney(s.money); m.classList.toggle('neg', s.money < 0);
+    const txt = (id, t) => { const el = $(id); if (el.textContent !== t) el.textContent = t; return el; };
+    const css = (el, k, v) => { if (el.style[k] !== v) el.style[k] = v; };
+    txt('sPop', fmtNum(s.pop));
+    txt('sJobs', fmtNum(s.jobsC + s.jobsI + s.jobsS));
+    const m = txt('sMoney', fmtMoney(s.money)); m.classList.toggle('neg', s.money < 0);
     const rate = s.incomePerDay - s.upkeepPerDay;
-    const r = $('sRate'); r.textContent = `${rate >= 0 ? '+' : '−'}${fmtNum(Math.abs(rate))} €/Tag`; r.classList.toggle('neg', rate < 0);
-    $('sHappy').textContent = `${Math.round(s.happiness)} %`;
+    const r = txt('sRate', `${rate >= 0 ? '+' : '−'}${fmtNum(Math.abs(rate))} €/Tag`); r.classList.toggle('neg', rate < 0);
+    txt('sHappy', `${Math.round(s.happiness)} %`);
     const h = Math.floor(s.hour), mi = Math.floor((s.hour - h) * 60);
-    $('sTime').textContent = `Tag ${s.day} · ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+    txt('sTime', `Tag ${s.day} · ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`);
     const st = STAGES[s.stage], nx = STAGES[s.stage + 1];
-    $('stageChip').textContent = st.name;
+    txt('stageChip', st.name);
     if (nx) {
-      $('stageFill').style.width = `${clamp((s.pop - st.pop) / (nx.pop - st.pop), 0, 1) * 100}%`;
-      $('stageNext').textContent = `noch ${fmtNum(Math.max(0, nx.pop - s.pop))} Einwohner bis ${nx.name}`;
-    } else { $('stageFill').style.width = '100%'; $('stageNext').textContent = 'Höchste Stufe erreicht'; }
+      css($('stageFill'), 'width', `${(clamp((s.pop - st.pop) / (nx.pop - st.pop), 0, 1) * 100).toFixed(1)}%`);
+      txt('stageNext', `noch ${fmtNum(Math.max(0, nx.pop - s.pop))} Einwohner bis ${nx.name}`);
+    } else { css($('stageFill'), 'width', '100%'); txt('stageNext', 'Höchste Stufe erreicht'); }
     const bar = (id, v) => {
       const el = $(id);
-      if (v >= 0) { el.style.bottom = '50%'; el.style.height = `${v * 50}%`; }
-      else { el.style.bottom = `${50 + v * 50}%`; el.style.height = `${-v * 50}%`; }
+      v = Math.round(v * 100) / 100;
+      if (v >= 0) { css(el, 'bottom', '50%'); css(el, 'height', `${v * 50}%`); }
+      else { css(el, 'bottom', `${50 + v * 50}%`); css(el, 'height', `${-v * 50}%`); }
     };
     bar('dR', s.demand.res); bar('dC', s.demand.com); bar('dI', s.demand.ind);
     this.updateSupply();
@@ -773,8 +846,9 @@ export class UI {
     const s = this.sim, st = s.util.stats;
     if (!st) return;
     const set = (id, frac, text, cls) => {
-      $(id).style.width = `${clamp(frac, 0, 1) * 100}%`;
-      $(`${id}t`).textContent = text;
+      const wd = `${(clamp(frac, 0, 1) * 100).toFixed(1)}%`;
+      if ($(id).style.width !== wd) $(id).style.width = wd;
+      const te = $(`${id}t`); if (te.textContent !== text) te.textContent = text;
       const row = $(id).closest('.sup');
       row.classList.toggle('bad', cls === 'bad'); row.classList.toggle('warn', cls === 'warn');
     };
@@ -847,7 +921,7 @@ export class UI {
       const t = tips[Math.floor(this.sim.day / 2) % tips.length];
       html = `<button class="adv tip" data-adv="tip">${icon('i-star')}<span>${t}</span></button>`;
     }
-    if ($('advice').innerHTML !== html) $('advice').innerHTML = html;
+    if (html !== this.adviceHtml && !this.adviceHeld) { this.adviceHtml = html; $('advice').innerHTML = html; }
   }
   adviceAction(k) {
     const i = (this.issueList || []).find((x) => x.k === k);
@@ -934,6 +1008,10 @@ export class UI {
 
   update(dt, now) {
     this.keyPan(dt);
+    // the simulation holds back its bigger jobs while the map is being moved
+    this.sim.interacting = this.game.interacting = this.pointers.size > 0 || now < (this.interactUntil || 0) || this.cam.vel.lengthSq() > 0;
+    // safety net: the camera is only held while a drag or pinch is really running
+    if (this.cam.held && (!this.drag || (this.drag.mode !== 'pan' && this.drag.mode !== 'gesture'))) this.cam.held = false;
     if (now - this.lastHud > 250) { this.lastHud = now; this.updateHud(); }
     if (now - this.lastMini > 1500 && $('minimap').offsetParent !== null) { this.lastMini = now; this.drawMinimap(); }
   }

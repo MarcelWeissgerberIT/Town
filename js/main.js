@@ -315,10 +315,25 @@ async function boot(hotData) {
     autosave += dt;
     if (autosave > 60) { autosave = 0; save.store(); region.snapshot(++thumbs % 5 === 0); }
   }
+  // a device that cannot keep up gets a slightly lower resolution instead of a choppy picture
+  let slow = 0, frameAvg = 1 / 60;
+  function adapt(rawDt) {
+    if (rawDt > 0.25) return; // tab was in the background
+    frameAvg += (rawDt - frameAvg) * 0.05;
+    slow = frameAvg > 1 / 36 ? slow + rawDt : 0;
+    const pr = renderer.getPixelRatio();
+    if (slow > 3 && pr > 1) {
+      slow = 0; frameAvg = 1 / 60;
+      renderer.setPixelRatio(Math.max(1, pr - 0.25));
+      resize();
+    }
+  }
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const raw = (now - last) / 1000;
+    const dt = Math.min(0.1, raw);
     last = now;
     step(dt, now);
+    adapt(raw);
     requestAnimationFrame(frame);
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) save.store(); });

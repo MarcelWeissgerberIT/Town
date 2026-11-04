@@ -88,7 +88,8 @@ export class Game {
   }
 
   update(dt) {
-    this.chunks.update(3);
+    // while the map is being dragged only one chunk is rebuilt per frame
+    this.chunks.update(this.interacting ? 1 : 3);
     if (this.countryDirty) { this.nature.buildCountryside(); this.countryDirty = false; this.treesDirty = true; }
     if (this.treesDirty) { this.nature.rebuildTrees(this.allBuildingTrees()); this.treesDirty = false; }
   }

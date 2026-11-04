@@ -87,9 +87,9 @@ das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 
 | Aktion | Maus / Tastatur | Touch |
 |---|---|---|
-| Karte verschieben | Linke Maustaste ziehen (Werkzeug „Ansehen“), WASD, Pfeiltasten | 1 Finger ziehen |
-| Zoomen | Mausrad, `+` / `−` | 2 Finger spreizen |
-| Drehen | Rechte Maustaste ziehen, `Q` / `E` | 2 Finger drehen |
+| Karte verschieben | Linke Maustaste ziehen (Werkzeug „Ansehen“), WASD, Pfeiltasten | 1 Finger ziehen (Schwung beim Loslassen); mit einem Bauwerkzeug 2 Finger |
+| Zoomen | Mausrad, `+` / `−` | 2 Finger spreizen – der Punkt zwischen den Fingern bleibt stehen |
+| Drehen | Rechte Maustaste ziehen, `Q` / `E` | 2 Finger deutlich drehen (kleine Drehungen beim Zoomen werden ignoriert) |
 | Werkzeuge | `1`–`0`, `N` Natur, `B` Verkehr, `X` Abriss | Werkzeugleiste unten |
 | Ansichten · Haushalt · Region | `V` · `H` · `M` | Knöpfe rechts über der Versorgung |
 | Gebäude drehen beim Platzieren | `R` | – |
@@ -98,6 +98,12 @@ das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 
 Ein Klick auf ein Haus, eine Person oder ein Fahrzeug öffnet die Details. Personen und Fahrzeugen
 kann man folgen.
+
+Die Karte folgt den Fingern direkt: Der berührte Punkt bleibt unter dem Finger, hebt man beim Zoomen
+einen Finger ab, geht es mit dem anderen ohne Sprung weiter. Während man die Karte bewegt, schiebt
+die Simulation ihre großen Rechnungen (Luft, Zufriedenheit, Bodenwert, Parken) kurz auf; sie laufen
+ohnehin verteilt, eine pro Bild. Schafft ein Gerät keine flüssigen 36 Bilder pro Sekunde, senkt das
+Spiel die Auflösung schrittweise.
 
 ## Spielablauf
 

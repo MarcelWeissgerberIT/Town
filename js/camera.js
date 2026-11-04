@@ -14,6 +14,8 @@ export class IsoCamera {
     this.ray = new THREE.Raycaster();
     this.follow = null; // function returning a Vector3 to follow
     this.cinematic = false;
+    this.vel = new THREE.Vector3(); // fling speed after a swipe (world units per second)
+    this.held = false;              // a finger or the mouse holds the map: no easing
   }
   resize(w, h) { this.aspect = w / h; this.w = w; this.h = h; }
   elevation(view = this.view) { return lerp(0.52, 0.78, smooth(2, 30, view)); }
@@ -24,6 +26,15 @@ export class IsoCamera {
       if (p) this.goalTarget.set(p.x, 0, p.z); else this.follow = null;
     }
     if (this.cinematic) { this.goalAz += dt * 0.06; }
+    // the map glides on after a swipe and slows down smoothly
+    if (this.vel.lengthSq() > 1e-6 && !this.held) {
+      this.goalTarget.addScaledVector(this.vel, dt);
+      this.target.addScaledVector(this.vel, dt);
+      this.clampTarget(this.goalTarget); this.clampTarget(this.target);
+      this.vel.multiplyScalar(Math.exp(-dt * 4.2));
+      if (this.vel.length() < this.view * 0.02) this.vel.set(0, 0, 0);
+    }
+    if (this.held) { this.place(); return; }
     const k = 1 - Math.exp(-dt * 9);
     this.view = lerp(this.view, this.goalView, k);
     this.az = lerp(this.az, this.goalAz, 1 - Math.exp(-dt * 7));
@@ -66,6 +77,25 @@ export class IsoCamera {
     const m = 6;
     t.x = clamp(t.x, -m, this.N + m); t.z = clamp(t.z, -m, this.N + m);
   }
+  // Direct manipulation: put the world point `anchor` exactly under the pixel (px, py).
+  // Optional view and angle are applied first, so pinch zoom and turn stay glued to the fingers.
+  pinTo(anchor, px, py, view, az) {
+    this.follow = null;
+    if (view !== undefined) this.view = this.goalView = clamp(view, this.minView, this.maxView);
+    if (az !== undefined) this.az = this.goalAz = az;
+    this.place();
+    const g = this.ground(px, py);
+    if (g) { this.target.x += anchor.x - g.x; this.target.z += anchor.z - g.z; }
+    this.clampTarget(this.target);
+    this.goalTarget.copy(this.target);
+    this.place();
+  }
+  stop() { this.vel.set(0, 0, 0); }
+  fling(vx, vz) {
+    const max = this.view * 7, l = Math.hypot(vx, vz);
+    const f = l > max ? max / l : 1;
+    this.vel.set(vx * f, 0, vz * f);
+  }
   // keep the ground point under the cursor fixed while zooming
   zoomAt(factor, px, py) {
     const before = this.ground(px, py);
@@ -92,7 +122,7 @@ export class IsoCamera {
   rotate(steps) { this.goalAz += steps * Math.PI / 2; }
   rotateBy(rad) { this.goalAz += rad; this.az += rad; }
   lookAt(x, z, view) {
-    this.follow = null;
+    this.follow = null; this.stop();
     this.goalTarget.set(x, 0, z);
     if (view) this.goalView = clamp(view, this.minView, this.maxView);
   }
