@@ -320,7 +320,8 @@ async function boot(hotData) {
   function adapt(rawDt) {
     if (rawDt > 0.25) return; // tab was in the background
     frameAvg += (rawDt - frameAvg) * 0.05;
-    slow = frameAvg > 1 / 36 ? slow + rawDt : 0;
+    // (a 30 fps cap, e.g. in power saving mode, is not counted as slow)
+    slow = frameAvg > 1 / 27 ? slow + rawDt : 0;
     const pr = renderer.getPixelRatio();
     if (slow > 3 && pr > 1) {
       slow = 0; frameAvg = 1 / 60;

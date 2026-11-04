@@ -102,7 +102,7 @@ kann man folgen.
 Die Karte folgt den Fingern direkt: Der berührte Punkt bleibt unter dem Finger, hebt man beim Zoomen
 einen Finger ab, geht es mit dem anderen ohne Sprung weiter. Während man die Karte bewegt, schiebt
 die Simulation ihre großen Rechnungen (Luft, Zufriedenheit, Bodenwert, Parken) kurz auf; sie laufen
-ohnehin verteilt, eine pro Bild. Schafft ein Gerät keine flüssigen 36 Bilder pro Sekunde, senkt das
+ohnehin verteilt, eine pro Bild. Schafft ein Gerät dauerhaft keine 27 Bilder pro Sekunde, senkt das
 Spiel die Auflösung schrittweise.
 
 ## Spielablauf
