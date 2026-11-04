@@ -4,6 +4,7 @@ import { VIEWS } from './heatmap.js';
 import { garbageDays } from './waste.js';
 import { fmtNum, fmtMoney, clamp, DIRS } from './util.js';
 import { siteStage, SITE_STAGES } from './construction.js';
+import { UndoStack } from './undo.js';
 
 const $ = (id) => document.getElementById(id);
 const icon = (id, cls = 'ic') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
@@ -49,6 +50,9 @@ const VIEW_NOTES = {
   traffic: 'Rot: Stau. Ampeln und Kreisverkehre lösen Kreuzungen, Hauptstraßen haben vier Spuren und Vorfahrt.',
 };
 const KIND_NAME = { res: 'Wohnen', com: 'Gewerbe', ind: 'Industrie', svc: 'Öffentlich' };
+// when a build waits for ✓: only with fingers (default), always, or never (tearing down buildings always asks)
+const CONFIRM_MODES = { touch: 'bei Touch', always: 'immer', never: 'nie' };
+const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { /* private mode */ } return null; };
 const COVER_NAMES = { fire: 'Feuerwehr', police: 'Polizei', health: 'Gesundheit', edu: 'Bildung' };
 
 export class UI {
@@ -64,6 +68,10 @@ export class UI {
     this.dayMode = 0; // 0 auto, 1 day, 2 evening, 3 night
     this.lastHud = 0;
     this.lastMini = 0;
+    this.undo = new UndoStack(this.sim);
+    this.pending = null;
+    this.confirmMode = CONFIRM_MODES[pref('lindenau-confirm')] ? pref('lindenau-confirm') : 'touch';
+    this.game.on('city', () => { this.undo.clear(); this.clearPending(); this.hideBar(); });
     this.buildToolbar();
     this.bindInput();
     this.bindHud();
@@ -93,7 +101,7 @@ export class UI {
   // On touch screens a button fires as soon as the finger lifts. Browsers sometimes
   // swallow the click that follows a map gesture; this keeps every tap reliable.
   bindTouchTaps() {
-    let down = null, synthEl = null, synthAt = 0;
+    let down = null, synthAt = 0, synthX = 0, synthY = 0;
     document.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') { down = null; return; }
       const b = e.target.closest?.('button, .toast');
@@ -111,12 +119,14 @@ export class UI {
         else return;
       }
       if (!d.b.contains(hit)) return;
-      synthEl = d.b; synthAt = performance.now();
+      synthAt = performance.now(); synthX = e.clientX; synthY = e.clientY;
       d.b.click();
     }, true);
+    // the browser's own click for the same tap must not fire a second time – also not on a
+    // button that was drawn in its place meanwhile (✓ turning into „Rückgängig“)
     document.addEventListener('click', (e) => {
-      if (e.isTrusted && synthEl && performance.now() - synthAt < 700 && synthEl.contains(e.target)) {
-        e.stopPropagation(); e.preventDefault(); synthEl = null;
+      if (e.isTrusted && synthAt && performance.now() - synthAt < 700 && Math.hypot(e.clientX - synthX, e.clientY - synthY) < 30) {
+        e.stopPropagation(); e.preventDefault(); synthAt = 0;
       }
     }, true);
   }
@@ -142,6 +152,7 @@ export class UI {
     setTimeout(fade, 100);
   }
   refreshToolbar() {
+    if (this.pending && (this.pending.tool !== this.tool || this.pending.placeType !== this.placeType)) this.clearPending();
     for (const b of document.querySelectorAll('.tool')) {
       const t = TOOLS.find((x) => x.id === b.dataset.tool);
       let on = t.id === this.tool;
@@ -330,6 +341,10 @@ export class UI {
     else {
       const t = this.tileAt(e.clientX, e.clientY);
       this.drag = { mode: 'tool', start: t, cur: t, x: e.clientX, y: e.clientY, touch, planted: new Set() };
+      if (this.tool === 'tree') {
+        if (this.confirmMode === 'always' || (this.confirmMode === 'touch' && touch)) this.drag.deferred = true;
+        else this.drag.undo = this.undo.begin('Bäume gepflanzt');
+      }
       this.toolPreview();
     }
   }
@@ -395,20 +410,23 @@ export class UI {
       if (d.moved) this.release(d);
       else if (d.tap && p && performance.now() - p.t < 700) this.click(e.clientX, e.clientY);
     }
-    if (d.mode === 'tool') this.toolApply(d);
+    if (d.mode === 'tool') this.finishTool(d);
   }
   key(e, down) {
     if (e.target.tagName === 'INPUT') return;
     const k = e.key.toLowerCase();
     if (down) this.keys.add(k); else { this.keys.delete(k); return; }
     if (!$('modal').hidden) { if (k === 'escape') this.closeModal(); return; }
+    if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.doUndo(); return; }
+    if (k === 'enter' && this.pending) { e.preventDefault(); this.commitPending(); return; }
+    if (k === 'escape' && this.pending) { this.clearPending(); return; }
     if (k === 'escape') { this.pickTool('inspect'); this.closeInfo(); $('flyout').hidden = true; this.setCinema(false); }
     else if (k === ' ') { e.preventDefault(); this.setSpeed(this.sim.speed === 0 ? (this.prevSpeed || 1) : 0); }
     else if (k === 'q') this.cam.rotate(-1);
     else if (k === 'e') this.cam.rotate(1);
     else if (k === '+' || k === '=') this.cam.zoomAt(0.75, innerWidth / 2, innerHeight / 2);
     else if (k === '-') this.cam.zoomAt(1.33, innerWidth / 2, innerHeight / 2);
-    else if (k === 'r') { this.placeRot = (this.placeRot + 1) % 4; this.toolPreview(); }
+    else if (k === 'r') this.rotatePlacement();
     else if (k === 'k') this.setCinema(!this.cam.cinematic);
     else if (k === 'v') this.openViews();
     else if (k === 'h') this.openBudget();
@@ -460,8 +478,7 @@ export class UI {
     }
     return { x, z, w: ww, h: hh, rot, ok: chk.ok, msg: chk.msg };
   }
-  toolPreview() {
-    const d = this.drag;
+  toolPreview(d = this.drag || this.pending) {
     const t = d ? d.cur : this.hoverTile;
     const w = this.game.world;
     const ov = this.overlay;
@@ -499,7 +516,8 @@ export class UI {
       const ok = w.isRoad(t[0], t[1]) && [5, 10].includes(w.roadMask(t[0], t[1]));
       ov.set([[t[0], t[1], 0.06, ok ? '#f2c230' : '#ef6a52']]);
     } else if (this.tool === 'tree') {
-      ov.set([[t[0], t[1], 0.04, '#7bd389']]);
+      const ts = d?.planted?.size ? [...d.planted].map((q) => q.split(',').map(Number)) : [t];
+      ov.set(ts.map(([x, z]) => [x, z, 0.04, '#7bd389']));
     } else if (this.tool === 'place') {
       const p = this.placement(t);
       if (!p) { ov.clear(); return; }
@@ -509,13 +527,215 @@ export class UI {
       const fx = p.x + p.w / 2 + DIRS[p.rot].dx * (p.rot % 2 ? p.w / 2 : p.h / 2) * 0.6;
       const fz = p.z + p.h / 2 + DIRS[p.rot].dz * (p.rot % 2 ? p.w / 2 : p.h / 2) * 0.6;
       ov.showArrow(fx, fz, p.rot, '#ffffff');
-      if (!p.ok && p.msg && !this.drag?.touch) this.setHint(`<b>${SERVICES[this.placeType].name}</b> · ${esc(p.msg)}`);
+      if (!p.ok && p.msg && !d?.touch) this.setHint(`<b>${SERVICES[this.placeType].name}</b> · ${esc(p.msg)}`);
     }
   }
-  cancelTool() { this.overlay.clear(); this.drag = null; }
+  cancelTool() { this.overlay.clear(); this.drag = null; if (this.pending) this.toolPreview(this.pending); }
+
+  // ------------------------------------------------------------- build preview, confirm and undo
+  // With fingers (or always, see menu) a build first shows a preview: ✓ builds it, ✗ drops it,
+  // a new drag replaces it, the map can still be moved with two fingers. Tearing down
+  // buildings always asks, because it cannot be undone. Everything else can be taken back.
+  needsConfirm(d) {
+    if (this.tool === 'bulldoze' && this.bulldozeInfo(d).buildings > 0) return true;
+    return this.confirmMode === 'always' || (this.confirmMode === 'touch' && !!d.touch);
+  }
+  finishTool(d) {
+    if (this.needsConfirm(d)) { this.setPending(d); return; }
+    this.clearPending();
+    this.toolApply(d);
+  }
+  setPending(d) {
+    this.pending = { ...d, mode: 'pending', tool: this.tool, placeType: this.placeType };
+    this.toolPreview(this.pending);
+    this.renderBar();
+  }
+  clearPending() {
+    if (!this.pending) return;
+    this.pending = null;
+    this.overlay.clear();
+    if (this.barMode === 'confirm') this.hideBar();
+  }
+  commitPending() {
+    const d = this.pending;
+    if (!d || !this.actionInfo(d).ok) return;
+    this.pending = null;
+    this.hideBar();
+    this.toolApply(d);
+  }
+  rotatePlacement() {
+    this.placeRot = (this.placeRot + 1) % 4;
+    this.toolPreview();
+    if (this.pending) this.renderBar();
+  }
+  bulldozeInfo(d) {
+    const w = this.game.world;
+    const o = { buildings: 0, roads: 0, lines: 0, zones: 0, trees: 0, cost: 0 };
+    if (!d.start || !d.cur) return o;
+    const seen = new Set();
+    for (const [x, z] of this.rect(d.start, d.cur)) {
+      if (!w.inb(x, z)) continue;
+      const k = w.idx(x, z);
+      if (w.pline[k]) { o.lines++; o.cost += COSTS.bulldoze; }
+      const b = w.buildingAt(x, z);
+      if (b && !seen.has(b.id)) { seen.add(b.id); o.buildings++; o.cost += COSTS.bulldoze * b.w * b.h; }
+      if (w.road[k]) { o.roads++; o.cost += COSTS.bulldoze; }
+      if (w.zone[k]) o.zones++;
+      if (w.trees[k]) o.trees++;
+    }
+    return o;
+  }
+  // what the pending action would do: text for the bar, whether it can be built
+  actionInfo(d) {
+    const w = this.game.world, sim = this.sim, t = d.cur, tool = d.tool || this.tool;
+    const bad = (text) => ({ ok: false, text });
+    const pay = (cost, text, extra = {}) => (cost > sim.money ? bad(`${text} – nicht genug Geld`) : { ok: true, text, cost, ...extra });
+    if (!t) return bad('Hier geht das nicht.');
+    if (tool === 'road' || tool === 'avenue') {
+      const type = tool === 'avenue' ? 2 : 1;
+      const rc = sim.roadCost(this.lpath(d.start, d.cur), type);
+      if (!rc.tiles.length) return bad(type === 2 ? 'Hier ist schon eine Hauptstraße.' : 'Hier kann keine Straße gebaut werden.');
+      return pay(rc.cost, `${type === 2 ? 'Hauptstraße' : 'Straße'}: <b>${rc.tiles.length}</b> ${rc.tiles.length === 1 ? 'Feld' : 'Felder'} · <b>${fmtMoney(rc.cost)}</b>`);
+    }
+    if (tool === 'line') {
+      const path = this.lpath(d.start, d.cur);
+      if (path.some(([x, z]) => w.inb(x, z) && w.buildingAt(x, z))) return bad('Leitungen können nicht über Gebäude führen.');
+      const lc = sim.lineCost(path);
+      if (!lc.n) return bad('Hier liegt schon eine Leitung.');
+      return pay(lc.cost, `Stromleitung: <b>${lc.n}</b> Felder · <b>${fmtMoney(lc.cost)}</b>`);
+    }
+    if (tool.startsWith('zone')) {
+      const zn = Number(tool.slice(4));
+      let n = 0;
+      for (const [x, z] of this.rect(d.start, d.cur)) {
+        if (!w.inb(x, z)) continue;
+        const k = w.idx(x, z);
+        if (!w.terrain[k] && !w.road[k] && w.bld[k] < 0 && !w.pline[k] && w.zone[k] !== zn) n++;
+      }
+      if (!n) return bad('Hier gibt es nichts auszuweisen.');
+      return { ok: true, text: `${ZONE_INFO[zn].name}: <b>${n}</b> ${n === 1 ? 'Feld' : 'Felder'} ausweisen`, cost: 0 };
+    }
+    if (tool === 'bulldoze') {
+      const o = this.bulldozeInfo(d);
+      const parts = [];
+      if (o.buildings) parts.push(`<b>${o.buildings}</b> ${o.buildings === 1 ? 'Gebäude' : 'Gebäude'}`);
+      if (o.roads) parts.push(`${o.roads} Straßenfeld${o.roads === 1 ? '' : 'er'}`);
+      if (o.lines) parts.push(`${o.lines} Leitung${o.lines === 1 ? '' : 'en'}`);
+      if (o.zones && !o.buildings) parts.push(`${o.zones} Zonenfeld${o.zones === 1 ? '' : 'er'}`);
+      if (o.trees && !o.buildings && !o.roads) parts.push(`${o.trees} Bäume`);
+      if (!parts.length) return bad('Hier gibt es nichts abzureißen.');
+      return { ok: true, text: `Abreißen: ${parts.join(', ')}${o.cost ? ` · <b>${fmtMoney(o.cost)}</b>` : ''}`, cost: o.cost, danger: true };
+    }
+    if (tool === 'place') {
+      const S = SERVICES[d.placeType || this.placeType];
+      const p = this.placement(t);
+      if (!S || !p) return bad('Hier geht das nicht.');
+      if (!p.ok) return bad(`${S.name}: ${esc(p.msg)}`);
+      return pay(S.cost, `${S.name} · <b>${fmtMoney(S.cost)}</b>`, { rotate: true });
+    }
+    if (tool === 'lights' || tool === 'roundabout') {
+      const kind = tool === 'lights' ? 1 : 2, name = kind === 1 ? 'Ampel' : 'Kreisverkehr';
+      if (!w.isJunction(t[0], t[1])) return bad(`${name} nur an Kreuzungen und Einmündungen.`);
+      if (kind === 2 && w.isWater(t[0], t[1])) return bad('Kein Kreisverkehr auf einer Brücke.');
+      if (w.junc[w.idx(t[0], t[1])] === kind) return { ok: true, text: `${name} entfernen`, cost: 0, danger: true };
+      const c = kind === 1 ? COSTS.lights : COSTS.roundabout;
+      return pay(c, `${name} bauen · <b>${fmtMoney(c)}</b>`);
+    }
+    if (tool === 'busstop') {
+      if (!w.isRoad(t[0], t[1]) || w.isWater(t[0], t[1])) return bad('Haltestellen gehören an eine Straße.');
+      if (w.busstop[w.idx(t[0], t[1])]) return { ok: true, text: 'Haltestelle entfernen', cost: 0, danger: true };
+      if (![5, 10].includes(w.roadMask(t[0], t[1]))) return bad('Nur an geraden Straßenstücken.');
+      return pay(COSTS.busstop, `Bushaltestelle · <b>${fmtMoney(COSTS.busstop)}</b>`);
+    }
+    if (tool === 'tree') {
+      const n = d.planted?.size || 1;
+      return pay(n * COSTS.tree, `<b>${n}</b> ${n === 1 ? 'Baum' : 'Bäume'} pflanzen · <b>${fmtMoney(n * COSTS.tree)}</b>`);
+    }
+    return bad('');
+  }
+
+  // the bar above the toolbar: confirm a preview, or take the last action back
+  renderBar() {
+    const bar = $('confirm'), d = this.pending;
+    if (!d) return;
+    const info = this.actionInfo(d);
+    clearTimeout(this.barTimer);
+    this.barMode = 'confirm';
+    bar.className = 'confirmbar';
+    bar.innerHTML = `<span class="ctext ${info.ok ? '' : 'bad'}">${info.text}</span>`
+      + (d.tool === 'place' ? `<button class="btn" data-c="rot" title="Drehen (R)">${icon('i-rotr')}<span>Drehen</span></button>` : '')
+      + `<button class="btn" data-c="no" title="Verwerfen (Esc)">${icon('i-close')}<span>Abbrechen</span></button>`
+      + `<button class="btn ok ${info.danger ? 'danger' : ''}" data-c="yes" title="Bestätigen (Enter)" ${info.ok ? '' : 'disabled'}>${icon('i-check')}<span>${d.tool === 'bulldoze' ? 'Abreißen' : info.danger ? 'Ja' : 'Bauen'}</span></button>`;
+    bar.onclick = (e) => {
+      const c = e.target.closest('[data-c]')?.dataset.c;
+      if (c === 'yes') this.commitPending();
+      else if (c === 'no') this.clearPending();
+      else if (c === 'rot') this.rotatePlacement();
+    };
+    bar.hidden = false;
+    document.body.classList.add('has-bar');
+  }
+  showUndo(e) {
+    const bar = $('confirm');
+    clearTimeout(this.barTimer);
+    this.barMode = 'undo';
+    bar.className = 'confirmbar undo';
+    bar.innerHTML = `<span class="ctext">${e.label}</span><button class="btn" data-c="undo" title="Rückgängig (Strg+Z)">${icon('i-undo')}<span>Rückgängig</span></button>`;
+    bar.onclick = (ev) => { if (ev.target.closest('[data-c=undo]')) this.doUndo(); };
+    bar.hidden = false;
+    document.body.classList.add('has-bar');
+    this.barTimer = setTimeout(() => { if (this.barMode === 'undo') this.hideBar(); }, 8000);
+  }
+  hideBar() {
+    clearTimeout(this.barTimer);
+    this.barMode = null;
+    $('confirm').hidden = true;
+    document.body.classList.remove('has-bar');
+  }
+  doUndo() {
+    this.clearPending();
+    const e = this.undo.undo();
+    if (this.barMode === 'undo') this.hideBar();
+    if (!e) { this.toast('Hier gibt es nichts mehr rückgängig zu machen.', 'i-undo'); return; }
+    this.audio?.play('click');
+    this.toast(`Rückgängig: ${e.label}${e.spent > 0 ? ` · ${fmtMoney(e.spent)} zurück` : ''}`, 'i-undo');
+    if (this.sel?.type === 'building' && !this.game.world.buildings.has(this.sel.ref.id)) this.closeInfo();
+    // one more step back stays offered while there is one
+    const next = this.undo.last();
+    if (next) this.showUndo(next);
+  }
+  // area an action touches, for the undo copy
+  actionArea(d) {
+    const t = d.cur;
+    if (!t) return null;
+    if (this.tool === 'place') { const p = this.placement(t); return p ? [p.x, p.z, p.x + p.w - 1, p.z + p.h - 1] : null; }
+    if (d.start && ['road', 'avenue', 'line', 'bulldoze'].includes(this.tool) || this.tool.startsWith('zone')) {
+      return [Math.min(d.start[0], t[0]), Math.min(d.start[1], t[1]), Math.max(d.start[0], t[0]), Math.max(d.start[1], t[1])];
+    }
+    return [t[0], t[1], t[0], t[1]];
+  }
+  actionLabel(d) {
+    const tool = this.tool;
+    if (tool === 'road') return 'Straße gebaut';
+    if (tool === 'avenue') return 'Hauptstraße gebaut';
+    if (tool === 'line') return 'Stromleitung gebaut';
+    if (tool.startsWith('zone')) return `${ZONE_INFO[Number(tool.slice(4))].name} ausgewiesen`;
+    if (tool === 'bulldoze') return 'Abgerissen';
+    if (tool === 'place') return `${SERVICES[this.placeType]?.name || 'Gebäude'}: Baubeginn`;
+    if (tool === 'lights') return 'Ampel geändert';
+    if (tool === 'roundabout') return 'Kreisverkehr geändert';
+    if (tool === 'busstop') return 'Haltestelle geändert';
+    if (tool === 'tree') return 'Bäume gepflanzt';
+    return 'Gebaut';
+  }
+
   toolApply(d) {
     const t = d.cur;
     const sim = this.sim;
+    // copy the touched tiles first, so the action can be taken back
+    const undo = d.undo || this.undo.begin(this.actionLabel(d));
+    const area = this.actionArea(d);
+    if (area) this.undo.save(undo, ...area);
     if (this.tool === 'road' || this.tool === 'avenue') {
       const r = sim.buildRoad(this.lpath(d.start, d.cur), this.tool === 'avenue' ? 2 : 1);
       if (!r.ok) this.toast(r.msg, 'i-road', 'var(--bad)');
@@ -544,7 +764,16 @@ export class UI {
       if (!r.ok) this.toast(r.msg, 'i-bus', 'var(--bad)');
       else this.toast(r.removed ? 'Haltestelle entfernt.' : (sim.busStops >= 2 ? 'Haltestelle gebaut. Der Bus fährt los!' : 'Haltestelle gebaut. Baue eine zweite, damit ein Bus fährt.'), 'i-bus');
     } else if (this.tool === 'tree' && t) {
-      this.plant(t);
+      if (d.deferred) {
+        // planted only now, after ✓
+        let n = 0;
+        for (const q of d.planted) {
+          const [x, z] = q.split(',').map(Number);
+          this.undo.save(undo, x, z, x, z);
+          if (sim.plantTree(x, z)) n++;
+        }
+        if (n) this.audio?.play('tree');
+      } else this.plant(t, d);
     } else if (this.tool === 'place' && t) {
       const p = this.placement(t);
       if (p) {
@@ -559,12 +788,16 @@ export class UI {
     }
     this.overlay.clear();
     if (d.touch) this.hoverTile = null;
+    const kept = this.undo.end(undo);
+    if (kept) this.showUndo(kept);
   }
-  plant(t) {
-    const d = this.drag;
+  plant(t, d = this.drag) {
     const key = `${t[0]},${t[1]}`;
     if (d && d.planted.has(key)) return;
     if (d) d.planted.add(key);
+    // waiting for ✓: only mark the spot
+    if (d?.deferred) { this.toolPreview(d); return; }
+    if (d?.undo) this.undo.save(d.undo, t[0], t[1], t[0], t[1]);
     if (this.sim.plantTree(t[0], t[1])) this.audio?.play('tree');
   }
 
@@ -1083,6 +1316,7 @@ export class UI {
         <button class="btn" id="mBudget">${icon('i-chart')}Haushalt und Steuern</button>
         <button class="btn" id="mFollow">${icon('i-eye')}Einer zufälligen Person folgen</button>
         <button class="btn" id="mShadows">${icon('i-sun')}Schatten: ${this.renderer.shadowMap.enabled ? 'an' : 'aus'}</button>
+        <button class="btn" id="mConfirm">${icon('i-check')}Bauen bestätigen: ${CONFIRM_MODES[this.confirmMode]}</button>
         <button class="btn" id="mHelp">${icon('i-cursor')}Bedienung</button>
         <button class="btn danger" id="mNew">${icon('i-bulldoze')}Neues Spiel beginnen</button>
       </div>
@@ -1098,6 +1332,12 @@ export class UI {
       else this.toast('Gerade ist niemand unterwegs.', 'i-people');
     };
     $('mShadows').onclick = () => { this.toggleShadows?.(); this.openMenu(); };
+    $('mConfirm').onclick = () => {
+      const keys = Object.keys(CONFIRM_MODES);
+      this.confirmMode = keys[(keys.indexOf(this.confirmMode) + 1) % keys.length];
+      pref('lindenau-confirm', this.confirmMode);
+      this.openMenu();
+    };
     $('mRegion').onclick = () => this.region?.open();
     $('mBudget').onclick = () => this.openBudget();
     $('mHelp').onclick = () => this.welcome();

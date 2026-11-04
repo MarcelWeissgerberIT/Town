@@ -166,9 +166,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(94px + var(--safe-b)); background: rgba(12, 18, 26, 0.82); color: var(--text); padding: 7px 14px; border-radius: 999px; font-size: 12.5px; z-index: 9; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .hint b { color: var(--accent); font-weight: 700; }
+/* build preview: confirm or drop it; afterwards the same spot offers undo */
+.confirmbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(94px + var(--safe-b)); z-index: 11; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); max-width: calc(100% - 16px); }
+.confirmbar .ctext { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-right: 4px; }
+.confirmbar .ctext b { color: var(--accent); font-weight: 700; }
+.confirmbar .ctext.bad { color: #ffb3a5; }
+.confirmbar .btn { flex: 0 0 auto; min-height: 46px; min-width: 46px; padding: 8px 14px; font-size: 14px; border-radius: 12px; }
+.confirmbar .btn .ic { width: 19px; height: 19px; }
+.confirmbar .btn.ok { background: var(--good); color: #10261a; border-color: transparent; }
+.confirmbar .btn.ok.danger { background: var(--bad); color: #fff; }
+.confirmbar .btn:disabled { opacity: 0.35; cursor: default; }
+.confirmbar.undo { padding: 4px 4px 4px 14px; border-radius: 999px; }
+.confirmbar.undo .btn { min-height: 38px; border-radius: 999px; }
+body.has-bar .hint { display: none; }
+/* messages sit above the toolbar (never over its buttons) and above the build bar */
+body.has-bar #toasts { bottom: calc(158px + var(--safe-b)); }
+body.cinema .confirmbar { display: none; }
 
 /* toasts */
-#toasts { position: absolute; left: 12px; bottom: calc(12px + var(--safe-b)); display: flex; flex-direction: column-reverse; gap: 6px; z-index: 12; width: min(330px, calc(100% - 24px)); pointer-events: none; }
+#toasts { position: absolute; left: 12px; bottom: calc(96px + var(--safe-b)); display: flex; flex-direction: column-reverse; gap: 6px; z-index: 12; width: min(330px, calc(100% - 24px)); pointer-events: none; }
 .toast { display: flex; gap: 9px; align-items: flex-start; padding: 9px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 13px; line-height: 1.35; animation: tin .35s ease-out; pointer-events: auto; cursor: pointer; }
 .toast .ic { width: 18px; height: 18px; margin-top: 1px; color: var(--tc, var(--accent)); }
 .toast.out { animation: tout .4s ease-in forwards; }
@@ -255,10 +271,14 @@ body.cinema .cinema-exit { display: flex; }
   .toolbar.more { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   .flyout { grid-template-columns: repeat(2, minmax(0, 1fr)); bottom: calc(84px + var(--safe-b)); left: 8px; right: 8px; transform: none; }
   .hint { bottom: calc(86px + var(--safe-b)); white-space: normal; text-align: center; border-radius: 12px; width: calc(100% - 16px); }
+  .confirmbar { bottom: calc(86px + var(--safe-b)); left: 8px; right: 8px; transform: none; max-width: none; padding-left: 12px; }
+  .confirmbar .ctext { white-space: normal; flex: 1; font-size: 13px; }
+  .confirmbar.undo { left: 50%; right: auto; transform: translateX(-50%); }
   #toasts { bottom: calc(90px + var(--safe-b)); left: 8px; }
 
 }
 @media (max-width: 520px) {
+  .confirmbar .btn span { display: none; }
   .city { flex: 1 1 100%; }
   .controls { flex: 1 1 100%; justify-content: space-between; }
   .advice { display: none; }

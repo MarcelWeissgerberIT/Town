@@ -93,11 +93,20 @@ das Spiel über „Zum Home-Bildschirm“ als Vollbild-App ablegen.
 | Werkzeuge | `1`–`0`, `N` Natur, `B` Verkehr, `X` Abriss | Werkzeugleiste unten |
 | Ansichten · Haushalt · Region | `V` · `H` · `M` | Knöpfe rechts über der Versorgung |
 | Gebäude drehen beim Platzieren | `R` | – |
+| Bauen bestätigen / verwerfen | `Enter` / `Esc` (wenn eingeschaltet) | ✓ Bauen / ✗ Abbrechen über der Werkzeugleiste |
+| Rückgängig | `Strg`+`Z` | „Rückgängig“ über der Werkzeugleiste |
 | Pause | Leertaste | Pause-Knopf |
 | Kinomodus | `K` | Kamera-Knopf |
 
 Ein Klick auf ein Haus, eine Person oder ein Fahrzeug öffnet die Details. Personen und Fahrzeugen
 kann man folgen.
+
+**Nichts aus Versehen bauen:** Mit dem Finger zeigt jede Bauaktion (Straße, Zone, Gebäude, Ampel,
+Bäume, Abriss …) zuerst nur eine Vorschau mit Preis. Erst ✓ baut, ✗ verwirft, ein neuer Strich ersetzt
+die Vorschau, und mit zwei Fingern lässt sich die Karte dabei weiter verschieben. Gebäude werden auf
+Wunsch gedreht. Das Abreißen von Gebäuden fragt immer nach, auch mit der Maus. Danach lässt sich jede
+Bauaktion etwa anderthalb Minuten lang rückgängig machen – das Geld kommt zurück. Im Menü stellt man
+unter „Bauen bestätigen“ ein, ob die Vorschau nur bei Touch (Standard), immer oder nie erscheint.
 
 Die Karte folgt den Fingern direkt: Der berührte Punkt bleibt unter dem Finger, hebt man beim Zoomen
 einen Finger ab, geht es mit dem anderen ohne Sprung weiter. Während man die Karte bewegt, schiebt
